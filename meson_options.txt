@@ -1,0 +1,6 @@
+option('systemdsystemunitdir', type: 'string',
+       description: 'Where to install the systemd unit (default: ask pkg-config, else PREFIX/lib/systemd/system)')
+option('sysctldir', type: 'string',
+       description: 'Where to install the sysctl.d file (default: ask pkg-config, else PREFIX/lib/sysctl.d)')
+option('sysctl', type: 'boolean', value: true,
+       description: 'Install a sysctl.d file enabling IPv6 forwarding and proxy_ndp')

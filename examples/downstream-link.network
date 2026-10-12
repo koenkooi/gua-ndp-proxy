@@ -1,0 +1,17 @@
+# systemd-networkd config for one downstream link (here: a USB gadget
+# interface). Advertises the uplink's /64 off-link so the device SLAACs a
+# global address but keeps routing through this host.
+[Match]
+Name=usb0
+
+[Network]
+Address=192.168.140.1/24
+DHCPServer=yes
+IPv6SendRA=yes
+IPv6Forwarding=yes
+IPMasquerade=both
+
+[IPv6Prefix]
+Prefix=2001:db8:1234:5678::/64
+OnLink=no
+Autonomous=yes

@@ -1,0 +1,36 @@
+[Unit]
+Description=Proxy global IPv6 addresses of downstream devices onto the uplink
+After=network.target
+ConditionPathExists=@sysconfdir@/gua-ndp-proxy/gua-ndp-proxy.conf
+
+[Service]
+Type=simple
+ExecStart=@bindir@/gua-ndp-proxy --config @sysconfdir@/gua-ndp-proxy/gua-ndp-proxy.conf
+Restart=on-failure
+RestartSec=2
+
+# Needs to change routes and neighbor tables and to send ICMP echo.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
