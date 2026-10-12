@@ -21,7 +21,7 @@ Only the latest release receives security fixes.
 and `CAP_NET_RAW`). It:
 
 - reads the kernel's neighbor, address and route tables by running `ip`,
-- adds and removes `/128` routes tagged `proto 99` and NDP proxy entries on
+- adds and removes `/128` routes tagged `proto 76` and NDP proxy entries on
   the uplink,
 - sends ICMPv6 echo requests on downstream links with `ping`.
 
@@ -42,7 +42,7 @@ Mitigations built in:
   entry there) is never proxied,
 - one link can claim at most `max_per_interface` addresses, and addresses
   already in use are kept in preference to new ones,
-- only routes tagged `proto 99` and proxy entries inside the configured
+- only routes tagged `proto 76` and proxy entries inside the configured
   prefix (or ones the daemon added) are ever removed.
 
 These are best effort. A quiet LAN host with no neighbor entry on the uplink

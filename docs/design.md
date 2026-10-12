@@ -60,7 +60,7 @@ address. The obvious options do not fit:
 
 ## Scope of changes
 
-The daemon only manages routes tagged `proto 99` and proxy entries inside the
+The daemon only manages routes tagged `proto 76` and proxy entries inside the
 configured prefix (or ones it added), and removes them on SIGTERM. What it
 refuses to proxy, and why, is in [SECURITY.md](../SECURITY.md).
 

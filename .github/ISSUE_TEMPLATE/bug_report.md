@@ -16,7 +16,7 @@ labels: bug
 **Output**
 
 <!-- `journalctl -u gua-ndp-proxy`, and on the gateway:
-     ip -6 route show table main proto 99
+     ip -6 route show table main proto 76
      ip -6 neigh show proxy
      ip -6 neigh show dev <downstream>
      On the device: ip -6 addr

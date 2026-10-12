@@ -7,7 +7,7 @@ it would do without changing anything.
 On the gateway, the working state for one device looks like this:
 
 ```
-$ ip -6 route show table main proto 99
+$ ip -6 route show table main proto 76
 2001:db8:1234:5678:200:5eff:fe00:5301 dev usb0 metric 1024 pref medium
 $ ip -6 neigh show proxy dev eth0
 2001:db8:1234:5678:200:5eff:fe00:5301 proxy

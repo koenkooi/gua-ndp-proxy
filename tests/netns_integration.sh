@@ -37,7 +37,7 @@ echo 2 > /proc/sys/net/ipv6/conf/up0/accept_ra
 echo "== device appears: route and proxy entry installed"
 ip -6 neigh add "$LL" lladdr 00:00:5e:00:53:01 dev dn0 nud permanent
 run_daemon
-ip -6 route show table main proto 99 | grep -q "^$GUA dev dn0" \
+ip -6 route show table main proto 76 | grep -q "^$GUA dev dn0" \
     || fail "host route missing"
 ip -6 neigh show proxy dev up0 | grep -q "^$GUA " || fail "proxy entry missing"
 
@@ -54,7 +54,7 @@ ip -6 route del 2001:db8:1234:5678:dead::1/128 dev dn0
 echo "== device leaves: everything we installed is removed"
 ip -6 neigh del "$LL" dev dn0
 run_daemon
-ip -6 route show table main proto 99 | grep -q "$GUA" && fail "route not removed"
+ip -6 route show table main proto 76 | grep -q "$GUA" && fail "route not removed"
 ip -6 neigh show proxy dev up0 | grep -q "$GUA" && fail "proxy entry not removed"
 
 echo "== address already answered on the uplink is refused"
@@ -62,19 +62,19 @@ ip -6 neigh add 2001:db8:1234:5678:200:5eff:fe00:5302 lladdr 02:00:00:00:00:01 \
     dev up0 nud permanent
 ip -6 neigh add fe80::200:5eff:fe00:5302 lladdr 02:00:00:00:00:02 dev dn0 nud permanent
 run_daemon
-ip -6 route show table main proto 99 | grep -q "fe00:5302" \
+ip -6 route show table main proto 76 | grep -q "fe00:5302" \
     && fail "proxied an address another host owns"
 
 echo "== our own address is refused"
 ip -6 neigh add fe80::2 lladdr 02:00:00:00:00:03 dev dn0 nud permanent
 run_daemon
-ip -6 route show table main proto 99 | grep -q "5678::2 " \
+ip -6 route show table main proto 76 | grep -q "5678::2 " \
     && fail "proxied this host's own address"
 
 echo "== dry run changes nothing"
 ip -6 neigh replace "$LL" lladdr 00:00:5e:00:53:01 dev dn0 nud permanent
 run_daemon --dry-run
-ip -6 route show table main proto 99 | grep -q "$GUA" && fail "dry run installed a route"
+ip -6 route show table main proto 76 | grep -q "$GUA" && fail "dry run installed a route"
 
 echo "== daemon mode: reacts to a new device, idles quietly, cleans up on SIGTERM"
 ip -6 neigh flush dev dn0 2>/dev/null || true
@@ -84,7 +84,7 @@ PID=$!
 sleep 1
 ip -6 neigh replace "$LL" lladdr 00:00:5e:00:53:01 dev dn0 nud permanent
 n=0
-until ip -6 route show table main proto 99 | grep -q "^$GUA "; do
+until ip -6 route show table main proto 76 | grep -q "^$GUA "; do
     n=$((n + 1)); [ $n -le 15 ] || { kill "$PID"; fail "daemon never installed the route"; }
     sleep 1
 done
@@ -96,7 +96,7 @@ echo "daemon CPU over 8s idle: ${used} ticks (100/s)"
 [ "$used" -lt 80 ] || { kill "$PID"; fail "daemon is busy-looping"; }
 kill -TERM "$PID"
 wait "$PID" || fail "daemon exited non-zero on SIGTERM"
-ip -6 route show table main proto 99 | grep -q "$GUA" && fail "route survived shutdown"
+ip -6 route show table main proto 76 | grep -q "$GUA" && fail "route survived shutdown"
 ip -6 neigh show proxy dev up0 | grep -q "$GUA" && fail "proxy entry survived shutdown"
 
 echo "PASS"

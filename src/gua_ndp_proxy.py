@@ -35,7 +35,9 @@ SYSFS_NET = "/sys/class/net"
 PROC_SYS = "/proc/sys"
 
 # Tags the host routes this daemon installs so it never touches anyone else's.
-ROUTE_PROTO = "99"
+# Must not be a protocol number the kernel assigns (rtnetlink.h RTPROT_*): 99
+# is RTPROT_OPENR, so cleanup would have deleted Open/R's routes.
+ROUTE_PROTO = "76"
 
 BAD_NEIGH_STATES = frozenset({"FAILED", "INCOMPLETE"})
 UNIQUE_LOCAL = ipaddress.IPv6Network("fc00::/7")
