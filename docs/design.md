@@ -58,14 +58,11 @@ address. The obvious options do not fit:
 - **Bridges.** A bridge outlives its clients, so a bridge only counts as
   present while it has member ports.
 
-## What it will and will not do
+## Scope of changes
 
-- It only manages routes tagged `proto 99` and proxy entries inside the
-  configured prefix (or ones it added itself). Other routes are left alone.
-- It never proxies an address this host holds, an address another host
-  already answers for on the uplink, or more than `max_per_interface`
-  addresses per link. See [SECURITY.md](../SECURITY.md) for why.
-- On SIGTERM it removes everything it installed.
+The daemon only manages routes tagged `proto 99` and proxy entries inside the
+configured prefix (or ones it added), and removes them on SIGTERM. What it
+refuses to proxy, and why, is in [SECURITY.md](../SECURITY.md).
 
 ## Limitations
 
