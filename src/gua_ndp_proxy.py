@@ -351,10 +351,14 @@ def read_sysctl(key: str) -> Optional[str]:
 
 
 def check_sysctls(uplink: str) -> None:
-    for key in ("net/ipv6/conf/all/forwarding", "net/ipv6/conf/all/proxy_ndp"):
-        if read_sysctl(key) != "1":
-            log.warning("sysctl %s is not 1; proxying will not work",
-                        key.replace("/", "."))
+    if read_sysctl("net/ipv6/conf/all/forwarding") != "1":
+        log.warning("sysctl net.ipv6.conf.all.forwarding is not 1; "
+                    "proxying will not work")
+    # The kernel answers proxied solicitations if either setting is on.
+    if "1" not in (read_sysctl("net/ipv6/conf/all/proxy_ndp"),
+                   read_sysctl(f"net/ipv6/conf/{uplink}/proxy_ndp")):
+        log.warning("neither net.ipv6.conf.all.proxy_ndp nor "
+                    "net.ipv6.conf.%s.proxy_ndp is 1; proxying will not work", uplink)
     forwarding = read_sysctl(f"net/ipv6/conf/{uplink}/forwarding")
     accept_ra = read_sysctl(f"net/ipv6/conf/{uplink}/accept_ra")
     if forwarding == "1" and accept_ra == "1":

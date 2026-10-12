@@ -41,7 +41,7 @@ The daemon warns at startup when these are wrong.
 | Setting | Why |
 |---|---|
 | `net.ipv6.conf.all.forwarding=1` | The gateway routes between the uplink and downstream links |
-| `net.ipv6.conf.all.proxy_ndp=1` | Without it the proxy entries are never answered. The `all` setting is the one that mattered in testing |
+| `net.ipv6.conf.all.proxy_ndp=1` | Without it the proxy entries are never answered. Setting `net.ipv6.conf.<uplink>.proxy_ndp=1` instead also works |
 | `net.ipv6.conf.<uplink>.accept_ra=2` | With forwarding on, the kernel ignores router advertisements on an interface whose `accept_ra` is 1, which silently drops the uplink's own SLAAC address and default route |
 
 The installed `60-gua-ndp-proxy.conf` sets the first two. The third depends

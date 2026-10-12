@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 import argparse
 import ipaddress
+import os
 import subprocess
+import tempfile
 import unittest
 from unittest import mock
 
@@ -229,6 +231,34 @@ class Config(unittest.TestCase):
     def test_rejects_tiny_interval(self):
         with self.assertRaises(ValueError):
             g.build_config(self.ns(uplink="eth0", interval=0.1), {})
+
+
+class Sysctls(unittest.TestCase):
+    def check(self, values):
+        with tempfile.TemporaryDirectory() as root:
+            for key, value in values.items():
+                path = os.path.join(root, key)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="ascii") as fh:
+                    fh.write(value + "\n")
+            with mock.patch.object(g, "PROC_SYS", root), \
+                    mock.patch.object(g.log, "warning") as warn:
+                g.check_sysctls("up0")
+            return [c.args[0] for c in warn.call_args_list]
+
+    def test_uplink_proxy_ndp_is_enough(self):
+        self.assertEqual(self.check({
+            "net/ipv6/conf/all/forwarding": "1",
+            "net/ipv6/conf/all/proxy_ndp": "0",
+            "net/ipv6/conf/up0/proxy_ndp": "1",
+            "net/ipv6/conf/up0/accept_ra": "2"}), [])
+
+    def test_warns_without_proxy_ndp(self):
+        got = self.check({"net/ipv6/conf/all/forwarding": "1",
+                          "net/ipv6/conf/all/proxy_ndp": "0",
+                          "net/ipv6/conf/up0/proxy_ndp": "0"})
+        self.assertEqual(len(got), 1)
+        self.assertIn("proxy_ndp", got[0])
 
 
 class FakeIp:
