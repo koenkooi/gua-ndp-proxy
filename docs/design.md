@@ -48,7 +48,8 @@ address. The obvious options do not fit:
   quiet link entirely, which would drop the proxy even though the device's
   address is still valid. Each pass pings the link-local address of every
   proxied device, and the daemon remembers the last addresses it saw on a link
-  until the link goes away.
+  until the link goes away. Remembered addresses are checked again on every
+  pass and dropped if they leave the prefix or another host claims them.
 - **Reconnects.** A fresh interface starts with an empty neighbor table and
   nothing guarantees the device speaks first, so each pass also pings
   `ff02::1` on every downstream link.
