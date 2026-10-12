@@ -22,7 +22,7 @@ $ ip -6 neigh show proxy dev eth0
 | Log says the configured prefix does not match the uplink | The upstream prefix changed. Update `prefix` and the advertised `[IPv6Prefix]` blocks, or use `prefix = auto` for the daemon and update the advertisements |
 | Address works, then disappears after the device sits idle | Should not happen: each pass pings proxied devices. If it does, check the interval and that `ping` is installed |
 | Nothing is proxied and the log says "offers N addresses, keeping M" | The link claimed more addresses than `max_per_interface`; a device (or something spoofing one) is flooding neighbor entries |
-| An address is skipped silently | It is held by this host, or another host already answers for it on the uplink |
+| An address is skipped silently | It is held by this host, another host already answers for it on the uplink, or another route more specific than the /64 already covers it |
 
 Requirements on the gateway: `ip` (iproute2), `ping` (iputils), and
 `CAP_NET_ADMIN` and `CAP_NET_RAW`.

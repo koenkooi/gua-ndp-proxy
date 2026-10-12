@@ -138,6 +138,25 @@ def parse_host_routes(text: str) -> Dict[str, str]:
     return routes
 
 
+ROUTE_TYPES = frozenset({"unicast", "unreachable", "blackhole", "prohibit", "throw"})
+
+
+def parse_route_destinations(text: str) -> List[ipaddress.IPv6Network]:
+    """Destination prefixes in `ip -6 route show` output, of any route type."""
+    out = []
+    for line in text.splitlines():
+        parts = line.split()
+        if parts and parts[0] in ROUTE_TYPES:
+            parts = parts[1:]
+        if not parts:
+            continue
+        try:
+            out.append(ipaddress.IPv6Network(parts[0]))
+        except ValueError:
+            continue
+    return out
+
+
 def uplink_prefix(addresses: Iterable[Tuple[ipaddress.IPv6Address, Set[str]]]
                   ) -> Optional[ipaddress.IPv6Network]:
     """The /64 the uplink currently holds a usable global address in."""
@@ -172,15 +191,21 @@ def candidate_addresses(neighbors: Iterable[Tuple[ipaddress.IPv6Address, str]],
 
 def select_addresses(candidates: Iterable[ipaddress.IPv6Address], *,
                      local: Set[str], on_uplink: Set[str], known: Set[str],
-                     limit: int) -> List[ipaddress.IPv6Address]:
+                     limit: int,
+                     foreign: Iterable[ipaddress.IPv6Network] = ()
+                     ) -> List[ipaddress.IPv6Address]:
     """Drop addresses that must never be proxied, then cap the count.
 
     A downstream device can fabricate neighbor entries, so refuse addresses
-    this host owns or that another host already answers for on the uplink,
-    and cap how many one link may claim (already-known ones win).
+    this host owns, that another host already answers for on the uplink, or
+    that someone else's route more specific than the /64 already sends
+    elsewhere (our /128 would override or replace it), and cap how many one
+    link may claim (already-known ones win).
     """
+    foreign = list(foreign)
     ok = [a for a in candidates
-          if str(a) not in local and str(a) not in on_uplink]
+          if str(a) not in local and str(a) not in on_uplink
+          and not any(a in net for net in foreign)]
     ok.sort(key=lambda a: (str(a) not in known, a))
     if len(ok) > limit:
         log.warning("downstream link offers %d addresses, keeping %d", len(ok), limit)
@@ -419,6 +444,10 @@ class Proxy:
             run(["ip", "-6", "-o", "addr", "show"]).stdout)}
         have_routes = parse_host_routes(run(
             ["ip", "-6", "route", "show", "table", "main", "proto", ROUTE_PROTO]).stdout)
+        foreign = [net for net in parse_route_destinations(
+            run(["ip", "-6", "route", "show", "table", "main"]).stdout)
+            if net.prefixlen > 64 and net.overlaps(prefix)
+            and not (net.prefixlen == 128 and str(net.network_address) in have_routes)]
         have_proxy = parse_proxy_entries(run(
             ["ip", "-6", "neigh", "show", "proxy", "dev", uplink]).stdout)
 
@@ -441,7 +470,7 @@ class Proxy:
             chosen = select_addresses(
                 candidate_addresses(neighbors, prefix),
                 local=local, on_uplink=on_uplink, known=set(have_routes),
-                limit=self.cfg.max_per_interface)
+                limit=self.cfg.max_per_interface, foreign=foreign)
             if chosen:
                 self.last_known[iface] = chosen
             for addr in self.last_known.get(iface, ()):

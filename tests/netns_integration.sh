@@ -51,6 +51,18 @@ ip -6 route show table main | grep -q "^2001:db8:1234:5678:dead::1 " \
     || fail "foreign route was removed"
 ip -6 route del 2001:db8:1234:5678:dead::1/128 dev dn0
 
+echo "== an address someone else routes elsewhere is refused"
+ip link add other0 type dummy
+ip link set other0 up
+ip -6 route add 2001:db8:1234:5678:200:5eff:fe00:5307/128 dev other0
+ip -6 neigh add fe80::200:5eff:fe00:5307 lladdr 00:00:5e:00:53:07 dev dn0 nud permanent
+run_daemon
+ip -6 route show table main | grep -q "^2001:db8:1234:5678:200:5eff:fe00:5307 dev other0 " \
+    || fail "foreign host route was replaced"
+ip -6 neigh show proxy dev up0 | grep -q "fe00:5307" && fail "proxied a foreign-routed address"
+ip -6 neigh del fe80::200:5eff:fe00:5307 dev dn0
+ip link del other0
+
 echo "== device leaves: everything we installed is removed"
 ip -6 neigh del "$LL" dev dn0
 run_daemon

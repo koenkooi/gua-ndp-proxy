@@ -40,6 +40,9 @@ Mitigations built in:
 - an address held by the gateway itself is never proxied,
 - an address another host already answers for on the uplink (a live neighbor
   entry there) is never proxied,
+- an address covered by someone else's route more specific than the /64 in
+  the main table (for example a `/128` towards a VPN peer) is never proxied,
+  so the daemon's own `/128` cannot replace or override it,
 - one link can claim at most `max_per_interface` addresses, and addresses
   already in use are kept in preference to new ones,
 - only routes tagged `proto 76` and proxy entries inside the configured

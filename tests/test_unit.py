@@ -68,6 +68,20 @@ class Parsing(unittest.TestCase):
             "2001:db8:1234:5678:1::1": "usb0",
         })
 
+    def test_route_destinations_any_type(self):
+        text = (
+            "2001:db8:1234:5678::77 dev wg0 metric 1024 pref medium\n"
+            "unreachable 2001:db8:1234:5678:1::/80 dev lo metric 1024 pref medium\n"
+            "2001:db8:1234:5678:2::/80 proto static metric 1024 pref medium\n"
+            "\tnexthop via fe80::1 dev eth0 weight 1\n"
+            "default via fe80::1 dev eth0\n"
+        )
+        self.assertEqual([str(n) for n in g.parse_route_destinations(text)], [
+            "2001:db8:1234:5678::77/128",
+            "2001:db8:1234:5678:1::/80",
+            "2001:db8:1234:5678:2::/80",
+        ])
+
 
 class UplinkPrefix(unittest.TestCase):
     def addrs(self, *items):
@@ -122,6 +136,10 @@ class Selection(unittest.TestCase):
 
     def test_never_proxies_address_answered_on_uplink(self):
         self.assertEqual(self.pick({GUA}, on_uplink={str(GUA)}), [])
+
+    def test_never_overrides_foreign_route(self):
+        foreign = [ipaddress.IPv6Network("2001:db8:1234:5678:200::/72")]
+        self.assertEqual(self.pick({GUA}, foreign=foreign), [])
 
     def test_limit_prefers_known(self):
         cands = {A(f"2001:db8:1234:5678::{i}") for i in range(1, 6)}
