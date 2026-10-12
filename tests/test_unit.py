@@ -180,11 +180,15 @@ class Planning(unittest.TestCase):
 class Events(unittest.TestCase):
     def test_uplink_chatter_ignored(self):
         self.assertFalse(g.relevant_events(
-            b"fe80::1 dev eth0 lladdr 00:11:22:33:44:55 REACHABLE\n", "eth0"))
+            b"fe80::1 dev eth0 lladdr 00:11:22:33:44:55 REACHABLE\n", {"usb0"}))
+
+    def test_unwatched_interface_ignored(self):
+        self.assertFalse(g.relevant_events(
+            b"fe80::1 dev docker0 lladdr 00:11:22:33:44:55 REACHABLE\n", {"usb0"}))
 
     def test_downstream_event_relevant(self):
         self.assertTrue(g.relevant_events(
-            b"Deleted fe80::2 dev usb0 lladdr 00:11:22:33:44:55 STALE\n", "eth0"))
+            b"Deleted fe80::2 dev usb0 lladdr 00:11:22:33:44:55 STALE\n", {"usb0"}))
 
 
 class Config(unittest.TestCase):

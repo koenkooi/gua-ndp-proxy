@@ -566,16 +566,18 @@ def start_monitor() -> subprocess.Popen:
                             bufsize=0)
 
 
-def relevant_events(chunk: bytes, uplink: str) -> bool:
-    """Whether a neighbor-event chunk touches anything but the uplink.
+def relevant_events(chunk: bytes, watched: Set[str]) -> bool:
+    """Whether a neighbor-event chunk touches a downstream link.
 
-    LAN chatter on the uplink is constant and irrelevant here.
+    Chatter on the uplink and on unrelated interfaces is constant; reacting
+    to it would run a pass, and ping every downstream device, every
+    MIN_RECONCILE_GAP seconds.
     """
     for line in chunk.decode("utf-8", "replace").splitlines():
         parts = line.split()
         if "dev" in parts:
             idx = parts.index("dev") + 1
-            if idx < len(parts) and parts[idx] != uplink:
+            if idx < len(parts) and parts[idx] in watched:
                 return True
     return False
 
@@ -596,7 +598,8 @@ def monitor_loop(proxy: Proxy, stop: threading.Event) -> None:
             ready, _, _ = select.select([mon.stdout], [], [], 1.0)
             if ready:
                 chunk = os.read(mon.stdout.fileno(), 65536)
-                if chunk and relevant_events(chunk, proxy.cfg.uplink):
+                if chunk and not pending and relevant_events(
+                        chunk, set(proxy.present_links())):
                     pending = True
             now = time.monotonic()
             due = (pending and now - last >= MIN_RECONCILE_GAP) \

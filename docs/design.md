@@ -54,8 +54,8 @@ address. The obvious options do not fit:
   nothing guarantees the device speaks first, so each pass also pings
   `ff02::1` on every downstream link.
 - **Event storms.** The daemon's own pings cause neighbor events. Events on
-  the uplink are ignored and reconciles are at least two seconds apart, so it
-  does not feed itself.
+  the uplink and on interfaces that are not downstream links are ignored,
+  and reconciles are at least two seconds apart, so it does not feed itself.
 - **Bridges.** A bridge outlives its clients, so a bridge only counts as
   present while it has member ports.
 
