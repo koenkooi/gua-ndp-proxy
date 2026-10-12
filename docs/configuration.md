@@ -1,0 +1,74 @@
+# Configuration
+
+Settings come from, in order of precedence: command-line flags, the config
+file, built-in defaults. The config file defaults to
+`/etc/gua-ndp-proxy/gua-ndp-proxy.conf` and is optional if flags give an
+uplink.
+
+## Config file
+
+INI format, one `[main]` section:
+
+```ini
+[main]
+uplink = eth0
+prefix = auto
+downstream = br-pan
+gadget_drivers = cdc_ether rndis_host cdc_ncm
+interval = 30
+max_per_interface = 8
+```
+
+| Key | Flag | Default | Meaning |
+|---|---|---|---|
+| `uplink` | `--uplink` | required | Interface facing the LAN, where proxy entries are added |
+| `prefix` | `--prefix` | `auto` | The delegated /64, or `auto` to follow the uplink's global address |
+| `downstream` | `--downstream` (repeatable) | none | Interfaces or bridges to watch, space separated in the file |
+| `gadget_drivers` | `--gadget-driver` (repeatable) | `cdc_ether rndis_host cdc_subset cdc_eem cdc_ncm zaurus` | Also watch any interface bound to one of these kernel drivers; `none` disables |
+| | `--no-gadget-discovery` | | Only watch `downstream` |
+| `interval` | `--interval` | `30` | Reconcile at least this often (seconds, minimum 2) |
+| `max_per_interface` | `--max-per-interface` | `8` | Most addresses one link may claim |
+
+Other flags: `--config FILE`, `--once` (reconcile once and leave the state
+installed), `--dry-run` (log what would change), `-v`, `--version`.
+
+To find the driver of a new device: `basename $(readlink /sys/class/net/IFACE/device/driver)`.
+
+## System settings
+
+The daemon warns at startup when these are wrong.
+
+| Setting | Why |
+|---|---|
+| `net.ipv6.conf.all.forwarding=1` | The gateway routes between the uplink and downstream links |
+| `net.ipv6.conf.all.proxy_ndp=1` | Without it the proxy entries are never answered. The `all` setting is the one that mattered in testing |
+| `net.ipv6.conf.<uplink>.accept_ra=2` | With forwarding on, the kernel ignores router advertisements on an interface whose `accept_ra` is 1, which silently drops the uplink's own SLAAC address and default route |
+
+The installed `60-gua-ndp-proxy.conf` sets the first two. The third depends
+on the uplink name, so set it yourself; see
+`examples/sysctl-uplink-accept-ra.conf`.
+
+## Advertising the prefix downstream
+
+Each downstream link's router advertisement must carry the uplink's /64 with
+`OnLink=no` and `Autonomous=yes`. With systemd-networkd:
+
+```ini
+[Network]
+IPv6SendRA=yes
+IPv6Forwarding=yes
+
+[IPv6Prefix]
+Prefix=2001:db8:1234:5678::/64
+OnLink=no
+Autonomous=yes
+```
+
+Add it as an extra `[IPv6Prefix]` block next to any ULA prefix you already
+advertise there. Anything that generates or rewrites that `.network` file
+(a Bluetooth PAN helper, a provisioning tool) must preserve the block; a
+generator that does not will silently remove the device's global address the
+next time it rewrites the file.
+
+The gateway must not hold an `Address=` inside that /64 on the downstream
+link.
