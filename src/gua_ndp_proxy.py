@@ -485,7 +485,7 @@ class Proxy:
             ["ip", "-6", "neigh", "show", "dev", uplink]))
             if s not in BAD_NEIGH_STATES}
 
-        wanted: Dict[str, str] = {}
+        claims: Dict[str, List[str]] = {}
         for iface in links:
             neighbors = parse_neighbors(run(
                 ["ip", "-6", "neigh", "show", "dev", iface]).stdout)
@@ -501,10 +501,16 @@ class Proxy:
                 limit=self.cfg.max_per_interface, foreign=foreign)
             self.last_known[iface] = chosen
             for addr in chosen:
-                key = str(addr)
-                if wanted.setdefault(key, iface) != iface:
-                    log.warning("%s offered on both %s and %s; keeping %s",
-                                key, wanted[key], iface, wanted[key])
+                claims.setdefault(str(addr), []).append(iface)
+        wanted: Dict[str, str] = {}
+        for key, ifaces in claims.items():
+            # The link that already has the route keeps it, so a device
+            # cannot take over another link's address just by sorting first.
+            current = have_routes.get(key)
+            wanted[key] = current if current in ifaces else ifaces[0]
+            if len(ifaces) > 1:
+                log.warning("%s offered on %s; keeping %s",
+                            key, " and ".join(ifaces), wanted[key])
         for iface in list(self.last_known):
             if iface not in links:
                 del self.last_known[iface]

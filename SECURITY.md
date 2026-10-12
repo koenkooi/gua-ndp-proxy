@@ -43,6 +43,8 @@ Mitigations built in:
 - an address covered by someone else's route more specific than the /64 in
   the main table (for example a `/128` towards a VPN peer) is never proxied,
   so the daemon's own `/128` cannot replace or override it,
+- an address already routed to one downstream link stays there when another
+  link claims it too,
 - one link can claim at most `max_per_interface` addresses, and addresses
   already in use are kept in preference to new ones,
 - only routes tagged `proto 76` and proxy entries inside the configured

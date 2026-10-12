@@ -236,7 +236,7 @@ class FakeIp:
 
     def __init__(self, uplink_addr="2001:db8:1234:5678::2"):
         self.uplink_addr = uplink_addr
-        self.neigh = {"up0": [], "dn0": []}
+        self.neigh = {"up0": [], "dn0": [], "a0": []}
         self.routes = {}
         self.proxy = set()
         self.failing = set()
@@ -315,6 +315,15 @@ class Reconcile(unittest.TestCase):
                 self.proxy.reconcile()
             self.assertEqual(self.ip.routes, {}, cmd)
             self.assertEqual(self.ip.proxy, set(), cmd)
+
+    def test_second_link_cannot_take_over_an_address(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.proxy.cfg.downstream = ("a0", "dn0")
+        self.ip.neigh["a0"] = [f"{LL} dev a0 lladdr 00:00:5e:00:53:66 REACHABLE"]
+        with self.assertLogs(g.log, "WARNING"):
+            self.proxy.reconcile()
+        self.assertEqual(self.ip.routes, {str(GUA): "dn0"})
 
 
 if __name__ == "__main__":
