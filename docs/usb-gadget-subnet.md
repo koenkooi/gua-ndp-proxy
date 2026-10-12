@@ -14,9 +14,10 @@ Enable it at build time with `-Dgadget-subnet=true`. It installs:
   `udev.pc`, or `-Dudevrulesdir=`)
 - `gadget-subnet.conf.example` among the examples
 
-udev only reads rules from its own directories, so with a prefix other than
-`/usr` and no `udev.pc` installed, pass `-Dudevrulesdir=/etc/udev/rules.d` (or
-`/usr/lib/udev/rules.d`) or the rule will not be seen.
+systemd-udevd reads rules only from `/etc`, `/run`, `/usr/local/lib` and
+`/usr/lib` (`udev(7)`), so with any other prefix and no `udev.pc` installed,
+pass `-Dudevrulesdir=/etc/udev/rules.d` (or `/usr/lib/udev/rules.d`) or the
+rule will not be seen.
 
 Copy that example to `/etc/gua-ndp-proxy/gadget-subnet.conf`, set
 `GUA_PREFIX` to your delegated /64, then replug the device (or
@@ -34,7 +35,13 @@ for the same subnet before either config exists.
 ## Matching other devices
 
 The udev rule matches the kernel drivers `cdc_ether`, `rndis_host`,
-`cdc_subset`, `cdc_eem`, `cdc_ncm` and `zaurus`. For another driver, find it
+`cdc_subset`, `cdc_eem`, `cdc_ncm` and `zaurus`. These are generic USB
+networking class drivers, so USB Ethernet adapters and cellular modems can
+use them too. The helper writes a config with a DHCP server for every
+matching interface, and its `05-` file takes precedence over that
+interface's existing `.network` file. If the uplink or any other
+non-gadget link uses one of these drivers, narrow the rule (for example
+with `ATTRS{idVendor}==`) before installing it. For another driver, find it
 with `basename $(readlink /sys/class/net/IFACE/device/driver)` and add it to
 the rule.
 

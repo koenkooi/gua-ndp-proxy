@@ -24,7 +24,7 @@ max_per_interface = 8
 | `uplink` | `--uplink` | required | Interface facing the LAN, where proxy entries are added |
 | `prefix` | `--prefix` | `auto` | The delegated /64, or `auto` to follow the uplink's global address |
 | `downstream` | `--downstream` (repeatable) | none | Interfaces or bridges to watch, space separated in the file |
-| `gadget_drivers` | `--gadget-driver` (repeatable) | `cdc_ether rndis_host cdc_subset cdc_eem cdc_ncm zaurus` | Also watch any interface bound to one of these kernel drivers; `none` disables |
+| `gadget_drivers` | `--gadget-driver` (repeatable) | `cdc_ether rndis_host cdc_subset cdc_eem cdc_ncm zaurus` | Also watch any interface bound to one of these kernel drivers; `none` disables. Every such interface except the uplink is treated as a trusted downstream link, including USB Ethernet adapters or modems that use these drivers |
 | | `--no-gadget-discovery` | | Only watch `downstream` |
 | `interval` | `--interval` | `30` | Reconcile at least this often (seconds, minimum 2) |
 | `max_per_interface` | `--max-per-interface` | `8` | Most addresses one link may claim |

@@ -50,6 +50,12 @@ Mitigations built in:
 - only routes tagged `proto 76` and proxy entries inside the configured
   prefix (or ones the daemon added) are ever removed.
 
+With gadget discovery on (the default), every interface bound to one of
+the `gadget_drivers` other than the uplink counts as a downstream link,
+whatever is plugged in. A USB Ethernet adapter or modem using one of those
+drivers then lets the hosts behind it claim addresses too; set
+`gadget_drivers = none` and list `downstream` explicitly on such a gateway.
+
 These are best effort. A quiet LAN host with no neighbor entry on the uplink
 can still be impersonated for as long as the device claims its address. Do not
 use this on a link where untrusted devices can attach, such as a bridge shared
