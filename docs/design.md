@@ -72,7 +72,10 @@ refuses to proxy, and why, is in [SECURITY.md](../SECURITY.md).
   that differs from their link-local one, so the derived address is wrong and
   the device is not proxied. Configure the device so both addresses use the
   same identifier, or give it a static address inside the prefix, which is
-  picked up directly if it appears in the neighbor table. On a device running
+  picked up directly once it appears in the gateway's neighbor table (after
+  the device has sent from it). The keep-alive ping goes to the link-local
+  address derived from the proxied one, which does not exist for such a
+  device, so the entry can lapse while the device is idle. On a device running
   systemd-networkd, `IPv6LinkLocalAddressGenerationMode=` in `[Network]` sets
   how the link-local address is built and `Token=` in `[IPv6AcceptRA]` sets
   the identifier used for SLAAC addresses (see `systemd.network(5)`).
