@@ -1,0 +1,13 @@
+# Install as /etc/gua-ndp-proxy/gadget-subnet.conf. Shell syntax; root-owned.
+
+# Private IPv4 subnets are 192.168.<SUBNET_BASE> through
+# 192.168.<SUBNET_BASE+SUBNET_SPAN-1>; the first one not in use is picked.
+#SUBNET_BASE=160
+#SUBNET_SPAN=80
+
+# Your delegated /64: adds the off-link router advertisement gua-ndp-proxy
+# needs. Leave empty for private IPv4 only.
+#GUA_PREFIX="2001:db8:1234:5678::/64"
+
+# IPv6 resolver to advertise in router advertisements (optional).
+#GUA_DNS6="2001:db8:1234:5678::1"

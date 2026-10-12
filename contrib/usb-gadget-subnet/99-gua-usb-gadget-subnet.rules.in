@@ -1,0 +1,1 @@
+SUBSYSTEM=="net", ACTION=="add|move", DRIVERS=="cdc_ether|rndis_host|cdc_subset|cdc_eem|cdc_ncm|zaurus", RUN+="@libexecdir@/gua-ndp-proxy/usb-gadget-subnet %k"

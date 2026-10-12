@@ -60,6 +60,7 @@ install_data(
   'docs/configuration.md',
   'docs/installation.md',
   'docs/troubleshooting.md',
+  'docs/usb-gadget-subnet.md',
   install_dir: docdir,
 )
 install_data(
@@ -68,6 +69,39 @@ install_data(
   'examples/downstream-link.network',
   install_dir: docdir / 'examples',
 )
+
+if get_option('gadget-subnet')
+  libexecdir = prefix / get_option('libexecdir')
+  udevrulesdir = get_option('udevrulesdir')
+  if udevrulesdir == ''
+    udev_dep = dependency('udev', required: false)
+    # udev.pc's udevdir is absolute and not prefix-relative: udev only reads
+    # rules from its own directories, so a custom prefix must not move them.
+    udevrulesdir = udev_dep.get_variable(
+      pkgconfig: 'udevdir',
+      default_value: prefix / 'lib' / 'udev',
+    ) / 'rules.d'
+  endif
+
+  install_data(
+    'contrib/usb-gadget-subnet/usb-gadget-subnet.sh',
+    install_dir: libexecdir / meson.project_name(),
+    install_mode: 'rwxr-xr-x',
+    rename: 'usb-gadget-subnet',
+  )
+  rules_conf = configuration_data()
+  rules_conf.set('libexecdir', libexecdir)
+  configure_file(
+    input: 'contrib/usb-gadget-subnet/99-gua-usb-gadget-subnet.rules.in',
+    output: '99-gua-usb-gadget-subnet.rules',
+    configuration: rules_conf,
+    install_dir: udevrulesdir,
+  )
+  install_data(
+    'contrib/usb-gadget-subnet/gadget-subnet.conf.example',
+    install_dir: docdir / 'examples',
+  )
+endif
 
 python = find_program('python3', version: '>=3.9')
 sh = find_program('sh')
@@ -86,4 +120,10 @@ test(
   args: [files('tests/netns_integration.sh')],
   env: test_env,
   timeout: 120,
+)
+test(
+  'gadget-subnet',
+  find_program('bash'),
+  args: [files('tests/gadget_subnet_test.sh')],
+  timeout: 60,
 )
