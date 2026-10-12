@@ -467,13 +467,18 @@ class Proxy:
         for iface in links:
             neighbors = parse_neighbors(run(
                 ["ip", "-6", "neigh", "show", "dev", iface]).stdout)
+            candidates = candidate_addresses(neighbors, prefix)
+            if not candidates:
+                # Remembered addresses go through the same refusals as fresh
+                # ones: a LAN host may have claimed one since, or the prefix
+                # may have moved.
+                candidates = {a for a in self.last_known.get(iface, ()) if a in prefix}
             chosen = select_addresses(
-                candidate_addresses(neighbors, prefix),
+                candidates,
                 local=local, on_uplink=on_uplink, known=set(have_routes),
                 limit=self.cfg.max_per_interface, foreign=foreign)
-            if chosen:
-                self.last_known[iface] = chosen
-            for addr in self.last_known.get(iface, ()):
+            self.last_known[iface] = chosen
+            for addr in chosen:
                 key = str(addr)
                 if wanted.setdefault(key, iface) != iface:
                     log.warning("%s offered on both %s and %s; keeping %s",

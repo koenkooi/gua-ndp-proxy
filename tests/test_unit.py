@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: MIT
 import argparse
 import ipaddress
+import subprocess
 import unittest
+from unittest import mock
 
 import gua_ndp_proxy as g
 
@@ -227,6 +229,81 @@ class Config(unittest.TestCase):
     def test_rejects_tiny_interval(self):
         with self.assertRaises(ValueError):
             g.build_config(self.ns(uplink="eth0", interval=0.1), {})
+
+
+class FakeIp:
+    """Just enough of `ip` and `ping` to drive Proxy.reconcile() in-process."""
+
+    def __init__(self, uplink_addr="2001:db8:1234:5678::2"):
+        self.uplink_addr = uplink_addr
+        self.neigh = {"up0": [], "dn0": []}
+        self.routes = {}
+        self.proxy = set()
+        self.failing = set()
+
+    def __call__(self, argv, timeout=10.0):
+        cmd = tuple(argv)
+        if cmd in self.failing:
+            return subprocess.CompletedProcess(argv, 1, "", "simulated failure")
+        out = ""
+        if cmd[0] == "ping":
+            pass
+        elif cmd[:5] == ("ip", "-6", "-o", "addr", "show"):
+            out = f"2: up0    inet6 {self.uplink_addr}/64 scope global\n"
+        elif cmd[:6] == ("ip", "-6", "route", "show", "table", "main"):
+            out = "".join(f"{a} dev {d} metric 1024\n" for a, d in self.routes.items())
+        elif cmd[:5] == ("ip", "-6", "neigh", "show", "proxy"):
+            out = "".join(f"{a} proxy\n" for a in self.proxy)
+        elif cmd[:4] == ("ip", "-6", "neigh", "show"):
+            out = "".join(f"{line}\n" for line in self.neigh[cmd[5]])
+        elif cmd[:4] == ("ip", "-6", "route", "replace"):
+            self.routes[cmd[4][:-4]] = cmd[6]
+        elif cmd[:4] == ("ip", "-6", "route", "del"):
+            self.routes.pop(cmd[4][:-4], None)
+        elif cmd[:5] == ("ip", "-6", "neigh", "replace", "proxy"):
+            self.proxy.add(cmd[5])
+        elif cmd[:5] == ("ip", "-6", "neigh", "del", "proxy"):
+            self.proxy.discard(cmd[5])
+        else:
+            raise AssertionError(f"unexpected command {argv}")
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+
+class Reconcile(unittest.TestCase):
+    def setUp(self):
+        self.ip = FakeIp()
+        for patch in (mock.patch.object(g, "run", self.ip),
+                      mock.patch.object(g, "link_present", lambda name: True)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.proxy = g.Proxy(g.Config(uplink="up0", downstream=("dn0",),
+                                      gadget_drivers=()))
+
+    def device_present(self):
+        self.ip.neigh["dn0"] = [f"{LL} dev dn0 lladdr 00:00:5e:00:53:01 REACHABLE"]
+
+    def test_device_proxied(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.assertEqual(self.ip.routes, {str(GUA): "dn0"})
+        self.assertEqual(self.ip.proxy, {str(GUA)})
+
+    def test_remembered_address_dropped_when_lan_host_claims_it(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.ip.neigh["up0"] = [f"{GUA} dev up0 lladdr 00:00:5e:00:53:99 REACHABLE"]
+        self.proxy.reconcile()
+        self.assertEqual(self.ip.routes, {})
+        self.assertEqual(self.ip.proxy, set())
+
+    def test_remembered_address_dropped_when_prefix_moves(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.ip.neigh["dn0"] = []
+        self.ip.uplink_addr = "2001:db8:aaaa:bbbb::2"
+        self.proxy.reconcile()
+        self.assertNotIn(str(GUA), self.ip.routes)
+        self.assertNotIn(str(GUA), self.ip.proxy)
 
 
 if __name__ == "__main__":
