@@ -24,7 +24,7 @@ For quick iteration on the daemon:
 
 ## Style
 
-- Python 3.9 compatible, standard library only. Format and lint with
+- Python 3.9 compatible, standard library only. Lint with
   `ruff check src tests` (config in `ruff.toml`).
 - Shell scripts pass `shellcheck`.
 - Keep parsing and decision logic in pure functions that take text and return
