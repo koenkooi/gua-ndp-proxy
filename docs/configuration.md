@@ -51,7 +51,9 @@ on the uplink name, so set it yourself; see
 ## Advertising the prefix downstream
 
 Each downstream link's router advertisement must carry the uplink's /64 with
-`OnLink=no` and `Autonomous=yes`. With systemd-networkd:
+the on-link flag clear and the autonomous flag set. With systemd-networkd
+(`IPv6Forwarding=` needs version 256 or newer; older versions ignore it, and
+the sysctl drop-in enables forwarding anyway):
 
 ```ini
 [Network]
@@ -61,7 +63,7 @@ IPv6Forwarding=yes
 [IPv6Prefix]
 Prefix=2001:db8:1234:5678::/64
 OnLink=no
-Autonomous=yes
+AddressAutoconfiguration=yes
 ```
 
 Add it as an extra `[IPv6Prefix]` block next to any ULA prefix you already

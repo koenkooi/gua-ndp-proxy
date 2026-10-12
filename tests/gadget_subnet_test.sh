@@ -46,6 +46,8 @@ GADGET_SUBNET_CONF=$work/gua.conf "$SCRIPT" usb0
 grep -q '^Prefix=2001:db8:1234:5678::/64$' "$work/net/05-usb-gadget-usb0.network" \
     || fail "prefix missing"
 grep -q '^OnLink=no$' "$work/net/05-usb-gadget-usb0.network" || fail "OnLink missing"
+grep -q '^AddressAutoconfiguration=yes$' "$work/net/05-usb-gadget-usb0.network" \
+    || fail "AddressAutoconfiguration missing"
 
 echo "== bad input is rejected"
 "$SCRIPT" '../x' 2>/dev/null && fail "path traversal accepted"

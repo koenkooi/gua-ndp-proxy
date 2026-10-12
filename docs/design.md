@@ -22,10 +22,10 @@ address. The obvious options do not fit:
 
 1. **Advertise the uplink's /64 downstream, off-link.** The gateway sends
    router advertisements on each downstream link with a prefix option for the
-   same /64 the uplink is in, flagged `OnLink=no, Autonomous=yes`. The device
-   SLAACs a global address in that prefix but does not assume the rest of the
-   /64 is on its link, so everything else still goes through the gateway as
-   its default router. The gateway itself holds no address in that prefix on
+   same /64 the uplink is in, with the on-link flag clear and the autonomous
+   (address-configuration) flag set. The device SLAACs a global address in
+   that prefix but does not assume the rest of the /64 is on its link, so
+   everything else still goes through the gateway as its default router. The gateway itself holds no address in that prefix on
    the downstream link, so it does not grow a bogus on-link route for the whole
    /64.
 

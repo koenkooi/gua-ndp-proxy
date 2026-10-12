@@ -14,4 +14,4 @@ IPMasquerade=both
 [IPv6Prefix]
 Prefix=2001:db8:1234:5678::/64
 OnLink=no
-Autonomous=yes
+AddressAutoconfiguration=yes

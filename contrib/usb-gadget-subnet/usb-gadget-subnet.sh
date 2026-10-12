@@ -120,7 +120,7 @@ trap 'rm -f "$tmp"' EXIT
         echo "[IPv6Prefix]"
         echo "Prefix=$GUA_PREFIX"
         echo "OnLink=no"
-        echo "Autonomous=yes"
+        echo "AddressAutoconfiguration=yes"
     fi
 } > "$tmp"
 chmod 0644 "$tmp"
