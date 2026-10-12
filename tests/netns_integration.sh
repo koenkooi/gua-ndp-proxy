@@ -121,4 +121,38 @@ kill -TERM "$PID"
 wait "$PID" || fail "daemon exited non-zero on SIGTERM"
 ip -6 neigh show proxy dev up0 | grep -q "$GUA" && fail "inherited proxy entry survived shutdown"
 
+echo "== end to end: a link-local-only device is found and a LAN host reaches it"
+# Real neighbor discovery between namespaces instead of static entries: the
+# daemon's ff02::1 ping must find the device, and the proxy entry must make
+# the kernel answer the LAN host's solicitation.
+mount -t tmpfs tmpfs /run
+ip netns add lan
+ip netns add dev
+ip link add up1 type veth peer name eth0 netns lan
+ip link add dn1 type veth peer name eth0 netns dev
+ip link set up1 up
+ip link set dn1 up
+E2E_GUA=2001:db8:1234:5679:200:5eff:fe00:5311
+ip -6 addr add 2001:db8:1234:5679::2/64 dev up1 nodad
+ip netns exec lan ip link set eth0 up
+ip netns exec lan ip -6 addr add 2001:db8:1234:5679::99/64 dev eth0 nodad
+ip netns exec dev ip link set eth0 address 00:00:5e:00:53:11
+# A router solicitation would put the device in the neighbor table by itself.
+ip netns exec dev sh -c 'echo 0 > /proc/sys/net/ipv6/conf/eth0/router_solicitations'
+ip netns exec dev ip link set eth0 up
+ip netns exec dev ip -6 addr add "$E2E_GUA/128" dev eth0 nodad
+n=0
+until ip -6 -o addr show dev dn1 scope link | grep -qv tentative \
+        && ip netns exec dev ip -6 -o addr show dev eth0 scope link | grep -qv tentative; do
+    n=$((n + 1)); [ $n -le 10 ] || fail "link-local addresses never became usable"
+    sleep 1
+done
+gw_ll=$(ip -6 -o addr show dev dn1 scope link | awk '{print $4}' | cut -d/ -f1)
+ip netns exec dev ip -6 route add default via "$gw_ll" dev eth0
+python3 "$DAEMON" --once --uplink up1 --downstream dn1 --no-gadget-discovery
+ip -6 route show table main proto 76 | grep -q "^$E2E_GUA dev dn1" \
+    || fail "device not discovered by the multicast ping"
+ip netns exec lan ping -6 -c 1 -W 2 "$E2E_GUA" >/dev/null \
+    || fail "LAN host cannot reach the proxied device"
+
 echo "PASS"
