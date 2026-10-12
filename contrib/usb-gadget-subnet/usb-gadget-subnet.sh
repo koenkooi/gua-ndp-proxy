@@ -11,6 +11,7 @@ set -euo pipefail
 CONF_FILE=${GADGET_SUBNET_CONF:-/etc/gua-ndp-proxy/gadget-subnet.conf}
 NETWORKD_DIR=${GADGET_SUBNET_NETWORKD_DIR:-/etc/systemd/network}
 SYSFS_NET=${GADGET_SUBNET_SYSFS:-/sys/class/net}
+LOCK_FILE=${GADGET_SUBNET_LOCK:-/run/usb-gadget-subnet.lock}
 
 # Defaults, overridable in CONF_FILE (a root-owned shell fragment).
 # Private subnets are 192.168.<SUBNET_BASE>..<SUBNET_BASE+SUBNET_SPAN-1>.0/24.
@@ -37,6 +38,12 @@ IFNAME=${1:-}
 
 IFINDEX=$(cat "$SYSFS_NET/$IFNAME/ifindex" 2>/dev/null) || exit 0
 [[ $IFINDEX =~ ^[0-9]+$ ]] || exit 0
+
+# udev runs this for several interfaces in parallel (at boot, or when two
+# devices are plugged in together); without the lock both pick the same
+# subnet before either config file exists.
+exec 9>"$LOCK_FILE"
+flock 9
 
 # Third octets already taken by other live interfaces, whether configured on
 # the link or by an existing config file of an interface that still exists.
@@ -126,5 +133,6 @@ trap 'rm -f "$tmp"' EXIT
 chmod 0644 "$tmp"
 mv -f "$tmp" "$out"
 trap - EXIT
+exec 9>&-
 
 [[ -n ${GADGET_SUBNET_NO_RELOAD:-} ]] || networkctl reload

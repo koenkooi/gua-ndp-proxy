@@ -22,6 +22,7 @@ echo 85 > "$work/sys/usb1/ifindex"   # same index modulo 80 as usb0
 
 export GADGET_SUBNET_SYSFS=$work/sys GADGET_SUBNET_NETWORKD_DIR=$work/net
 export GADGET_SUBNET_NO_RELOAD=1 GADGET_SUBNET_CONF=$work/none.conf
+export GADGET_SUBNET_LOCK=$work/lock
 
 echo "== first device gets the subnet derived from its ifindex"
 "$SCRIPT" usb0
@@ -39,6 +40,14 @@ echo "== rerunning for the same interface keeps its subnet"
 "$SCRIPT" usb0
 grep -q '^Address=192.168.165.1/24$' "$work/net/05-usb-gadget-usb0.network" \
     || fail "usb0 subnet changed on rerun"
+
+echo "== devices set up in parallel still get different subnets"
+for _ in 1 2 3 4 5; do
+    rm -f "$work"/net/*
+    "$SCRIPT" usb0 & "$SCRIPT" usb1 & wait
+    [[ -z $(grep -h '^Address=' "$work"/net/* | sort | uniq -d) ]] \
+        || fail "parallel runs picked the same subnet"
+done
 
 echo "== config file adds the off-link prefix"
 printf 'GUA_PREFIX="2001:db8:1234:5678::/64"\n' > "$work/gua.conf"

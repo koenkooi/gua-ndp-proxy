@@ -29,8 +29,9 @@ Starting from `SUBNET_BASE + ifindex mod SUBNET_SPAN`, the first subnet not
 already used by another live interface or by another live gadget interface's
 config file. The result is written to
 `/etc/systemd/network/05-usb-gadget-<iface>.network`, which sorts ahead of
-generic matches. Two devices plugged in at the same instant can still race
-for the same subnet before either config exists.
+generic matches. Runs are serialised with `flock` (util-linux) on
+`/run/usb-gadget-subnet.lock`, because udev handles several interfaces in
+parallel, for example at boot.
 
 ## Matching other devices
 
