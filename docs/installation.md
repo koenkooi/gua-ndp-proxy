@@ -52,10 +52,16 @@ Run by hand without `--config`, the daemon reads
 ## Notes on the unit
 
 The unit drops all capabilities except `CAP_NET_ADMIN` and `CAP_NET_RAW` and
-applies systemd's filesystem, kernel and system-call sandboxing. It has been
-checked with `systemd-analyze verify` only; if the daemon fails to start on
-your system, `journalctl -u gua-ndp-proxy` shows why, and relaxing
-`SystemCallFilter=` is the first thing to try. Please report what you found.
+applies systemd's filesystem, kernel and system-call sandboxing. Besides
+`systemd-analyze verify`, the integration tests (daemon, `ip` and `ping`)
+have passed inside a transient user service with the unit's
+`SystemCallFilter=`, `RestrictAddressFamilies=`, `MemoryDenyWriteExecute=`,
+`ProtectSystem=` and `PrivateDevices=` settings, widened only by the mount
+and namespace calls the tests themselves need. The capability bounding set,
+`ProtectKernelTunables=` and `RestrictNamespaces=` have not been tested as a
+real root service. If the daemon fails to start on your system,
+`journalctl -u gua-ndp-proxy` shows why, and relaxing `SystemCallFilter=` is
+the first thing to try. Please report what you found.
 
 ## Uninstall
 
