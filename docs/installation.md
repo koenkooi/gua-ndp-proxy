@@ -31,8 +31,11 @@ they are unavailable.
 2. Set `net.ipv6.conf.<uplink>.accept_ra = 2`
    (`examples/sysctl-uplink-accept-ra.conf`) and apply sysctls with
    `sudo sysctl --system`.
-3. Create `/etc/gua-ndp-proxy/gua-ndp-proxy.conf` from
-   `examples/gua-ndp-proxy.conf`. The service does not start without it.
+3. Create `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf` from
+   `examples/gua-ndp-proxy.conf`. The unit is skipped (its
+   `ConditionPathExists=` fails) without it. `SYSCONFDIR` is Meson's
+   `sysconfdir`: `/etc` with `--prefix=/usr`, but `/usr/local/etc` with the
+   default prefix; pass `-Dsysconfdir=/etc` to use `/etc` there too.
 
 ## Run
 
@@ -42,7 +45,9 @@ journalctl -u gua-ndp-proxy -f
 ```
 
 Try it without changing anything first with
-`gua-ndp-proxy --config /etc/gua-ndp-proxy/gua-ndp-proxy.conf --dry-run --once -v`.
+`gua-ndp-proxy --config SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf --dry-run --once -v`.
+Run by hand without `--config`, the daemon reads
+`/etc/gua-ndp-proxy/gua-ndp-proxy.conf` if it exists.
 
 ## Notes on the unit
 
