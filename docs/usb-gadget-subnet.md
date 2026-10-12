@@ -14,6 +14,10 @@ Enable it at build time with `-Dgadget-subnet=true`. It installs:
   `udev.pc`, or `-Dudevrulesdir=`)
 - `gadget-subnet.conf.example` among the examples
 
+udev only reads rules from its own directories, so with a prefix other than
+`/usr` and no `udev.pc` installed, pass `-Dudevrulesdir=/etc/udev/rules.d` (or
+`/usr/lib/udev/rules.d`) or the rule will not be seen.
+
 Copy that example to `/etc/gua-ndp-proxy/gadget-subnet.conf`, set
 `GUA_PREFIX` to your delegated /64, then replug the device (or
 `udevadm trigger --action=add /sys/class/net/<iface>`).

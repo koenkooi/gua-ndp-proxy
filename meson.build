@@ -56,6 +56,9 @@ endif
 
 install_data(
   'LICENSE',
+  'README.md',
+  'CHANGELOG.md',
+  'SECURITY.md',
   'docs/design.md',
   'docs/configuration.md',
   'docs/installation.md',
