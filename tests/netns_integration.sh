@@ -111,4 +111,14 @@ wait "$PID" || fail "daemon exited non-zero on SIGTERM"
 ip -6 route show table main proto 76 | grep -q "$GUA" && fail "route survived shutdown"
 ip -6 neigh show proxy dev up0 | grep -q "$GUA" && fail "proxy entry survived shutdown"
 
+echo "== daemon adopts state left by an earlier run and removes it on SIGTERM"
+run_daemon
+ip -6 neigh show proxy dev up0 | grep -q "^$GUA " || fail "--once did not install the proxy entry"
+python3 "$DAEMON" --uplink up0 --downstream dn0 --no-gadget-discovery &
+PID=$!
+sleep 3
+kill -TERM "$PID"
+wait "$PID" || fail "daemon exited non-zero on SIGTERM"
+ip -6 neigh show proxy dev up0 | grep -q "$GUA" && fail "inherited proxy entry survived shutdown"
+
 echo "PASS"

@@ -482,6 +482,9 @@ class Proxy:
             if iface not in links:
                 del self.last_known[iface]
 
+        # Entries left by a previous run (--once, a crash) are never re-added,
+        # so adopt them here or cleanup() would leave them behind.
+        self.owned_proxy |= have_proxy & wanted.keys()
         manageable = {a for a in have_proxy
                       if a in self.owned_proxy
                       or ipaddress.IPv6Address(a) in prefix}
