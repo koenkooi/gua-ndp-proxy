@@ -1,0 +1,9 @@
+/build/
+/builddir/
+__pycache__/
+*.pyc
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+*.zip
+*.tar.*
