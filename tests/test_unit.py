@@ -305,6 +305,17 @@ class Reconcile(unittest.TestCase):
         self.assertNotIn(str(GUA), self.ip.routes)
         self.assertNotIn(str(GUA), self.ip.proxy)
 
+    def test_failed_query_skips_the_pass(self):
+        # fe80::2 derives to the gateway's own uplink address.
+        self.ip.neigh["dn0"] = ["fe80::2 dev dn0 lladdr 00:00:5e:00:53:02 REACHABLE"]
+        for cmd in (("ip", "-6", "-o", "addr", "show"),
+                    ("ip", "-6", "neigh", "show", "dev", "up0")):
+            self.ip.failing = {cmd}
+            with self.assertLogs(g.log, "ERROR"):
+                self.proxy.reconcile()
+            self.assertEqual(self.ip.routes, {}, cmd)
+            self.assertEqual(self.ip.proxy, set(), cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

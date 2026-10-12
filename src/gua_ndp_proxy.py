@@ -326,6 +326,22 @@ def run(argv: List[str], timeout: float = 10.0) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(argv, 255, "", str(exc))
 
 
+class QueryFailed(Exception):
+    pass
+
+
+def query(argv: List[str]) -> str:
+    """Output of a read-only `ip` command.
+
+    Raises instead of returning empty output: an empty address or neighbor
+    list would silently disable the refusal checks for that pass.
+    """
+    result = run(argv)
+    if result.returncode != 0:
+        raise QueryFailed(f"{' '.join(argv)}: {result.stderr.strip()}")
+    return result.stdout
+
+
 def read_sysctl(key: str) -> Optional[str]:
     try:
         with open(os.path.join(PROC_SYS, key), encoding="ascii") as fh:
@@ -436,20 +452,26 @@ class Proxy:
         return sorted(n for n in names if valid_ifname(n) and link_present(n))
 
     def reconcile(self) -> None:
+        try:
+            self._reconcile()
+        except QueryFailed as exc:
+            log.error("skipping this pass: %s", exc)
+
+    def _reconcile(self) -> None:
         prefix = self.resolve_prefix()
         if prefix is None:
             return
         uplink = self.cfg.uplink
         local = {str(a) for a, _ in parse_addresses(
-            run(["ip", "-6", "-o", "addr", "show"]).stdout)}
-        have_routes = parse_host_routes(run(
-            ["ip", "-6", "route", "show", "table", "main", "proto", ROUTE_PROTO]).stdout)
+            query(["ip", "-6", "-o", "addr", "show"]))}
+        have_routes = parse_host_routes(query(
+            ["ip", "-6", "route", "show", "table", "main", "proto", ROUTE_PROTO]))
         foreign = [net for net in parse_route_destinations(
-            run(["ip", "-6", "route", "show", "table", "main"]).stdout)
+            query(["ip", "-6", "route", "show", "table", "main"]))
             if net.prefixlen > 64 and net.overlaps(prefix)
             and not (net.prefixlen == 128 and str(net.network_address) in have_routes)]
-        have_proxy = parse_proxy_entries(run(
-            ["ip", "-6", "neigh", "show", "proxy", "dev", uplink]).stdout)
+        have_proxy = parse_proxy_entries(query(
+            ["ip", "-6", "neigh", "show", "proxy", "dev", uplink]))
 
         for addr, iface in have_routes.items():
             if addr in have_proxy:
@@ -459,8 +481,8 @@ class Proxy:
         for iface in links:
             self._ping("ff02::1", iface)
 
-        on_uplink = {str(a) for a, s in parse_neighbors(run(
-            ["ip", "-6", "neigh", "show", "dev", uplink]).stdout)
+        on_uplink = {str(a) for a, s in parse_neighbors(query(
+            ["ip", "-6", "neigh", "show", "dev", uplink]))
             if s not in BAD_NEIGH_STATES}
 
         wanted: Dict[str, str] = {}
