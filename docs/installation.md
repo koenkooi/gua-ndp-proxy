@@ -31,11 +31,13 @@ they are unavailable.
 2. Set `net.ipv6.conf.<uplink>.accept_ra = 2`
    (`examples/sysctl-uplink-accept-ra.conf`) and apply sysctls with
    `sudo sysctl --system`.
-3. Create `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf` from
-   `examples/gua-ndp-proxy.conf`. The unit is skipped (its
-   `ConditionPathExists=` fails) without it. `SYSCONFDIR` is Meson's
-   `sysconfdir`: `/etc` with `--prefix=/usr`, but `/usr/local/etc` with the
-   default prefix; pass `-Dsysconfdir=/etc` to use `/etc` there too.
+3. Set `uplink`, and `downstream` for links other than USB gadgets, in
+   `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf`. `meson install` installs
+   it from `examples/gua-ndp-proxy.conf` only when the file does not exist
+   yet, so reinstalling or upgrading keeps your edits; packagers should mark
+   it as a configuration file. `SYSCONFDIR` is Meson's `sysconfdir`: `/etc`
+   with `--prefix=/usr`, but `/usr/local/etc` with the default prefix; pass
+   `-Dsysconfdir=/etc` to use `/etc` there too.
 
 ## Run
 
@@ -70,4 +72,6 @@ sudo systemctl disable --now gua-ndp-proxy
 sudo ninja -C build uninstall
 ```
 
-The daemon removes its routes and proxy entries when it stops.
+The daemon removes its routes and proxy entries when it stops. Uninstalling
+leaves `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf` in place; delete it by
+hand if you no longer need it.

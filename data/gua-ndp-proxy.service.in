@@ -1,7 +1,6 @@
 [Unit]
 Description=Proxy global IPv6 addresses of downstream devices onto the uplink
 After=network.target
-ConditionPathExists=@sysconfdir@/gua-ndp-proxy/gua-ndp-proxy.conf
 
 [Service]
 Type=simple

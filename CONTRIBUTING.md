@@ -11,13 +11,15 @@ meson setup build
 meson test -C build --print-errorlogs
 ```
 
-`meson test` runs three suites:
+`meson test` runs four suites:
 
 - `unit`: pure-logic tests of the daemon; no privileges needed.
 - `netns-integration`: runs the daemon against a real kernel inside an
   unprivileged user, network and mount namespace. Skipped (not failed) where
   unprivileged user namespaces are unavailable.
 - `gadget-subnet`: tests the optional udev helper against a fake sysfs.
+- `install-config`: checks that installing the configuration never
+  overwrites an existing one.
 
 For quick iteration on the daemon:
 `PYTHONPATH=src python3 -m unittest discover -s tests`.

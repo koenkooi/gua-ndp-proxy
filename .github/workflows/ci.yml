@@ -55,4 +55,4 @@ jobs:
           python-version: "3.13"
       - run: pip install ruff
       - run: ruff check src tests
-      - run: shellcheck -x contrib/usb-gadget-subnet/usb-gadget-subnet.sh tests/*.sh
+      - run: shellcheck -x contrib/usb-gadget-subnet/usb-gadget-subnet.sh data/install-config.sh tests/*.sh

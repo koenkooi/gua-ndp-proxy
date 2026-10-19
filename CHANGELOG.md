@@ -14,7 +14,9 @@ All notable changes are documented here. The format follows
   prefix detection from the uplink.
 - Safeguards: foreign routes untouched, own and uplink-answered addresses
   refused, per-link address cap, cleanup on shutdown.
-- Meson build, hardened systemd unit, sysctl drop-in and examples.
+- Meson build, hardened systemd unit, sysctl drop-in and examples;
+  `meson install` adds a default configuration without overwriting an
+  existing one.
 - Optional udev helper giving each USB gadget interface its own private
   subnet.
 - Unit tests, a network-namespace integration test and CI.

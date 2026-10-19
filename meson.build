@@ -66,6 +66,12 @@ install_data(
   'docs/usb-gadget-subnet.md',
   install_dir: docdir,
 )
+meson.add_install_script(
+  files('data/install-config.sh'),
+  files('examples/gua-ndp-proxy.conf'),
+  sysconfdir / 'gua-ndp-proxy',
+)
+
 install_data(
   'examples/gua-ndp-proxy.conf',
   'examples/sysctl-uplink-accept-ra.conf',
@@ -123,6 +129,11 @@ test(
   args: [files('tests/netns_integration.sh')],
   env: test_env,
   timeout: 120,
+)
+test(
+  'install-config',
+  sh,
+  args: [files('tests/install_config_test.sh')],
 )
 test(
   'gadget-subnet',

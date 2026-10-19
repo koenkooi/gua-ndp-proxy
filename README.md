@@ -31,11 +31,14 @@ meson setup build --prefix=/usr
 meson test -C build
 sudo meson install -C build
 
-sudo install -d /etc/gua-ndp-proxy
-sudo cp /usr/share/doc/gua-ndp-proxy/examples/gua-ndp-proxy.conf /etc/gua-ndp-proxy/
-sudoedit /etc/gua-ndp-proxy/gua-ndp-proxy.conf     # set uplink, downstream
+sudoedit /etc/gua-ndp-proxy/gua-ndp-proxy.conf     # set uplink
 sudo systemctl enable --now gua-ndp-proxy
 ```
+
+`meson install` puts a default configuration in `/etc/gua-ndp-proxy/` and
+leaves an existing one alone, so reinstalling keeps your settings. USB gadget
+links are found automatically; list any other downstream link, such as a
+Bluetooth PAN bridge, as `downstream`.
 
 You also need to advertise the /64 off-link on each downstream link
 (`examples/downstream-link.network`) and set a few sysctls; see
