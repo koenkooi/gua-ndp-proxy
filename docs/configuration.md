@@ -31,7 +31,8 @@ max_per_interface = 8
 With `uplink = auto` the daemon waits until a default route exists, which at
 boot is when the uplink's first router advertisement arrives. If the route
 moves to another interface, it removes what it installed on the old one and
-carries on there.
+carries on there. A named uplink must exist when the daemon starts; if it
+does not, the daemon exits and its log lists the interfaces that do.
 
 Other flags: `--config FILE`, `--once` (reconcile once and leave the state
 installed), `--dry-run` (log what would change), `-v`, `--version`.

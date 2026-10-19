@@ -433,5 +433,20 @@ class AutoUplink(Reconcile):
                       self.ip.calls)
 
 
+class MissingUplink(unittest.TestCase):
+    def test_exits_naming_the_interfaces_that_exist(self):
+        with tempfile.TemporaryDirectory() as sysfs:
+            for name in ("lo", "end0", "wlan0"):
+                os.mkdir(os.path.join(sysfs, name))
+            with mock.patch.object(g, "SYSFS_NET", sysfs), \
+                    mock.patch.object(g, "DEFAULT_CONFIG", os.path.join(sysfs, "none")), \
+                    mock.patch.object(g, "setup_logging", lambda verbose: None), \
+                    self.assertLogs(g.log, "ERROR") as logs:
+                rc = g.main(["--uplink", "eth0", "--once"])
+        self.assertEqual(rc, 2)
+        self.assertIn("eth0 does not exist", logs.output[0])
+        self.assertIn("end0, wlan0;", logs.output[0])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -418,6 +418,13 @@ def gadget_interfaces(drivers: Iterable[str]) -> Set[str]:
     return found
 
 
+def interface_names() -> List[str]:
+    try:
+        return sorted(n for n in os.listdir(SYSFS_NET) if n != "lo")
+    except OSError:
+        return []
+
+
 def link_present(name: str) -> bool:
     """Whether a downstream link currently has something attached.
 
@@ -768,6 +775,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         log.error("configuration error: %s", exc)
         return 2
 
+    if cfg.uplink and not os.path.isdir(os.path.join(SYSFS_NET, cfg.uplink)):
+        log.error("uplink interface %s does not exist. Set uplink to one of: "
+                  "%s; or to auto, to use the interface with the IPv6 default "
+                  "route", cfg.uplink, ", ".join(interface_names()) or "(none found)")
+        return 2
     proxy = Proxy(cfg)
 
     if args.once:

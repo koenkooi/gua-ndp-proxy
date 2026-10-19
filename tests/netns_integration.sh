@@ -96,6 +96,11 @@ ip -6 route del default via fe80::1 dev up0
 ip -6 route del "$GUA/128" dev dn0 proto 76
 ip -6 neigh del proxy "$GUA" dev up0
 
+echo "== a missing uplink is a clear startup error"
+out=$(python3 "$DAEMON" --once --uplink nosuch0 --downstream dn0 \
+    --no-gadget-discovery 2>&1) && fail "started without its uplink"
+echo "$out" | grep -q "nosuch0 does not exist" || fail "unclear error: $out"
+
 echo "== daemon mode: reacts to a new device, idles quietly, cleans up on SIGTERM"
 ip -6 neigh flush dev dn0 2>/dev/null || true
 ip -6 neigh flush dev up0 2>/dev/null || true

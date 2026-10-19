@@ -12,7 +12,8 @@ All notable changes are documented here. The format follows
   each device that SLAACs an address in the uplink's /64 on a downstream link.
 - Configuration by file and flags; `--once`, `--dry-run`, automatic
   prefix detection from the uplink, and `uplink = auto` (the default) to
-  use the interface carrying the IPv6 default route.
+  use the interface carrying the IPv6 default route. A named uplink that
+  does not exist stops the daemon with a message listing the ones that do.
 - Safeguards: foreign routes untouched, own and uplink-answered addresses
   refused, per-link address cap, cleanup on shutdown.
 - Meson build, hardened systemd unit, sysctl drop-in and examples;
