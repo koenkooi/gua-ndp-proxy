@@ -1,5 +1,7 @@
 # gua-ndp-proxy
 
+![An iPAQ h2200 on Bluetooth PAN to a Linux host running gua-ndp-proxy, on Ethernet to the world](docs/images/banner.svg)
+
 Give a device behind a private link — a USB network gadget, a Bluetooth PAN
 bridge — a real, routable IPv6 address, without NAT and without putting it on
 the LAN's wire.
@@ -65,4 +67,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE), except the banner image `docs/images/banner.svg`: it adapts
+"HP iPAQ h2200, front view" by Koen Kooi, from the picowl project, licensed
+[CC-BY-SA-4.0](https://creativecommons.org/licenses/by-sa/4.0/). The drawing
+was scaled and placed next to the other elements of the banner, and the
+banner is licensed CC-BY-SA-4.0 as well.
