@@ -31,11 +31,13 @@ they are unavailable.
 2. Set `net.ipv6.conf.<uplink>.accept_ra = 2`
    (`examples/sysctl-uplink-accept-ra.conf`) and apply sysctls with
    `sudo sysctl --system`.
-3. Set `uplink`, and `downstream` for links other than USB gadgets, in
-   `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf`. `meson install` installs
-   it from `examples/gua-ndp-proxy.conf` only when the file does not exist
-   yet, so reinstalling or upgrading keeps your edits; packagers should mark
-   it as a configuration file. `SYSCONFDIR` is Meson's `sysconfdir`: `/etc`
+3. Review `SYSCONFDIR/gua-ndp-proxy/gua-ndp-proxy.conf`: by default the
+   uplink is the interface carrying the IPv6 default route and USB gadget
+   links are found automatically; add `downstream` for other links, such as
+   a Bluetooth PAN bridge. `meson install` installs it from
+   `examples/gua-ndp-proxy.conf` only when the file does not exist yet, so
+   reinstalling or upgrading keeps your edits; packagers should mark it as a
+   configuration file. `SYSCONFDIR` is Meson's `sysconfdir`: `/etc`
    with `--prefix=/usr`, but `/usr/local/etc` with the default prefix; pass
    `-Dsysconfdir=/etc` to use `/etc` there too.
 

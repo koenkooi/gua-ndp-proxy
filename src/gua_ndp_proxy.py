@@ -157,6 +157,40 @@ def parse_route_destinations(text: str) -> List[ipaddress.IPv6Network]:
     return out
 
 
+def default_route_devices(text: str) -> List[str]:
+    """Devices of the default routes in `ip -6 route show default`, best metric first.
+
+    A multipath default route has no `dev` on its own line; its first
+    `nexthop` line names the device.
+    """
+    routes: List[Tuple[int, int, str]] = []
+    pending: Optional[int] = None  # metric of a multipath route awaiting its nexthop
+    for line in text.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "default":
+            metric = 1024
+            if "metric" in parts[:-1]:
+                try:
+                    metric = int(parts[parts.index("metric") + 1])
+                except ValueError:
+                    pass
+            pending = None
+            if "dev" in parts[:-1]:
+                routes.append((metric, len(routes), parts[parts.index("dev") + 1]))
+            else:
+                pending = metric
+        elif parts[0] == "nexthop" and pending is not None and "dev" in parts[:-1]:
+            routes.append((pending, len(routes), parts[parts.index("dev") + 1]))
+            pending = None
+    out: List[str] = []
+    for _, _, dev in sorted(routes):
+        if dev not in out:
+            out.append(dev)
+    return out
+
+
 def uplink_prefix(addresses: Iterable[Tuple[ipaddress.IPv6Address, Set[str]]]
                   ) -> Optional[ipaddress.IPv6Network]:
     """The /64 the uplink currently holds a usable global address in."""
@@ -242,7 +276,7 @@ def plan(wanted: Dict[str, str], have_routes: Dict[str, str],
 
 @dataclasses.dataclass
 class Config:
-    uplink: str
+    uplink: Optional[str] = None  # None: the interface with the default route
     prefix: Optional[ipaddress.IPv6Network] = None  # None: follow the uplink
     downstream: Tuple[str, ...] = ()
     gadget_drivers: Tuple[str, ...] = DEFAULT_GADGET_DRIVERS
@@ -278,9 +312,9 @@ def build_config(args: argparse.Namespace, file_values: Dict[str, str]) -> Confi
             return cli
         return file_values.get(key, default)
 
-    uplink = pick(args.uplink, "uplink", None)
-    if not uplink:
-        raise ValueError("an uplink interface is required (--uplink or config file)")
+    uplink: Optional[str] = str(pick(args.uplink, "uplink", "auto")).strip()
+    if uplink.lower() in ("", "auto"):
+        uplink = None
 
     downstream = args.downstream if args.downstream else file_values.get(
         "downstream", "").split()
@@ -303,7 +337,7 @@ def build_config(args: argparse.Namespace, file_values: Dict[str, str]) -> Confi
         max_per_interface=int(pick(args.max_per_interface, "max_per_interface", 8)),
         dry_run=args.dry_run,
     )
-    for name in (cfg.uplink, *cfg.downstream):
+    for name in ((cfg.uplink,) if cfg.uplink else ()) + cfg.downstream:
         if not valid_ifname(name):
             raise ValueError(f"invalid interface name: {name!r}")
     if not cfg.downstream and not cfg.gadget_drivers:
@@ -411,6 +445,8 @@ class Proxy:
         # persisted so a restart re-derives everything from the kernel.
         self.last_known: Dict[str, List[ipaddress.IPv6Address]] = {}
         self.owned_proxy: Set[str] = set()
+        self.uplink: Optional[str] = cfg.uplink
+        self._uplink_checked = False
         self._prefix: Optional[ipaddress.IPv6Network] = None
         self._drift_warned = 0.0
 
@@ -427,16 +463,51 @@ class Proxy:
     def _ping(self, target: str, iface: str) -> None:
         run(["ping", "-6", "-c", "1", "-W", "1", "-I", iface, target])
 
+    def resolve_uplink(self) -> Optional[str]:
+        """The configured uplink, or the interface carrying the default route.
+
+        Detection runs every pass: at boot the route only appears once the
+        uplink's router advertisement arrives, and it can move later (a
+        laptop going from Wi-Fi to Ethernet). On a move, everything installed
+        on the old uplink is removed first.
+        """
+        if self.cfg.uplink:
+            if not self._uplink_checked:
+                check_sysctls(self.cfg.uplink)
+                self._uplink_checked = True
+            return self.cfg.uplink
+        downstream = set(self.cfg.downstream) | gadget_interfaces(self.cfg.gadget_drivers)
+        devices = [d for d in default_route_devices(
+            query(["ip", "-6", "route", "show", "default"]))
+            if d not in downstream and valid_ifname(d)]
+        picked = devices[0] if devices else None
+        if picked == self.uplink and self._uplink_checked:
+            return picked
+        if self.uplink and picked != self.uplink:
+            log.info("the IPv6 default route left %s; removing what was "
+                     "installed there", self.uplink)
+            self.cleanup()
+        if picked:
+            log.info("using %s as uplink: it carries the IPv6 default route", picked)
+            check_sysctls(picked)
+        else:
+            log.warning("no IPv6 default route yet, so no uplink to proxy on; "
+                        "waiting. With forwarding on, the uplink only learns "
+                        "one with accept_ra=2. Set uplink to skip detection")
+        self.uplink = picked
+        self._uplink_checked = True
+        return picked
+
     def resolve_prefix(self) -> Optional[ipaddress.IPv6Network]:
         live = uplink_prefix(parse_addresses(
-            run(["ip", "-6", "-o", "addr", "show", "dev", self.cfg.uplink]).stdout))
+            run(["ip", "-6", "-o", "addr", "show", "dev", self.uplink]).stdout))
         if self.cfg.prefix is None:
             if live is None:
                 log.warning("%s has no global prefix; leaving state untouched",
-                            self.cfg.uplink)
+                            self.uplink)
                 return None
             if live != self._prefix:
-                log.info("using prefix %s from %s", live, self.cfg.uplink)
+                log.info("using prefix %s from %s", live, self.uplink)
                 self._prefix = live
             return live
         if live is not None and live != self.cfg.prefix:
@@ -445,14 +516,14 @@ class Proxy:
                 log.error("configured prefix %s but %s is in %s: the upstream "
                           "prefix changed; update the config and every "
                           "[IPv6Prefix] block advertised downstream",
-                          self.cfg.prefix, self.cfg.uplink, live)
+                          self.cfg.prefix, self.uplink, live)
                 self._drift_warned = now
         return self.cfg.prefix
 
     def present_links(self) -> List[str]:
         names = set(self.cfg.downstream)
         names |= gadget_interfaces(self.cfg.gadget_drivers)
-        names.discard(self.cfg.uplink)
+        names.discard(self.uplink)
         return sorted(n for n in names if valid_ifname(n) and link_present(n))
 
     def reconcile(self) -> None:
@@ -462,10 +533,12 @@ class Proxy:
             log.error("skipping this pass: %s", exc)
 
     def _reconcile(self) -> None:
+        uplink = self.resolve_uplink()
+        if uplink is None:
+            return
         prefix = self.resolve_prefix()
         if prefix is None:
             return
-        uplink = self.cfg.uplink
         local = {str(a) for a, _ in parse_addresses(
             query(["ip", "-6", "-o", "addr", "show"]))}
         have_routes = parse_host_routes(query(
@@ -556,7 +629,7 @@ class Proxy:
                          "dev", iface, "proto", ROUTE_PROTO])
         for addr in sorted(self.owned_proxy):
             self._apply(["ip", "-6", "neigh", "del", "proxy", addr,
-                         "dev", self.cfg.uplink])
+                         "dev", self.uplink])
         self.owned_proxy.clear()
 
 
@@ -654,7 +727,9 @@ def make_parser() -> argparse.ArgumentParser:
                     "links onto the uplink.")
     p.add_argument("--config", metavar="FILE",
                    help=f"config file (default: {DEFAULT_CONFIG} if present)")
-    p.add_argument("--uplink", metavar="IFACE", help="interface facing the LAN")
+    p.add_argument("--uplink", metavar="IFACE|auto",
+                   help="interface facing the LAN; 'auto' (default) picks the "
+                        "one carrying the IPv6 default route")
     p.add_argument("--prefix", metavar="CIDR|auto",
                    help="delegated /64; 'auto' (default) follows the uplink")
     p.add_argument("--downstream", metavar="IFACE", action="append",
@@ -693,7 +768,6 @@ def main(argv: Optional[List[str]] = None) -> int:
         log.error("configuration error: %s", exc)
         return 2
 
-    check_sysctls(cfg.uplink)
     proxy = Proxy(cfg)
 
     if args.once:
@@ -703,7 +777,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     stop = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.set())
-    log.info("starting: uplink=%s prefix=%s", cfg.uplink, cfg.prefix or "auto")
+    log.info("starting: uplink=%s prefix=%s", cfg.uplink or "auto", cfg.prefix or "auto")
     monitor_loop(proxy, stop)
     if not cfg.dry_run:
         proxy.cleanup()

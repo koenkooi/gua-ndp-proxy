@@ -88,6 +88,14 @@ ip -6 neigh replace "$LL" lladdr 00:00:5e:00:53:01 dev dn0 nud permanent
 run_daemon --dry-run
 ip -6 route show table main proto 76 | grep -q "$GUA" && fail "dry run installed a route"
 
+echo "== uplink auto: the interface carrying the default route is used"
+ip -6 route add default via fe80::1 dev up0
+python3 "$DAEMON" --once --uplink auto --downstream dn0 --no-gadget-discovery
+ip -6 neigh show proxy dev up0 | grep -q "^$GUA " || fail "auto uplink did not proxy on up0"
+ip -6 route del default via fe80::1 dev up0
+ip -6 route del "$GUA/128" dev dn0 proto 76
+ip -6 neigh del proxy "$GUA" dev up0
+
 echo "== daemon mode: reacts to a new device, idles quietly, cleans up on SIGTERM"
 ip -6 neigh flush dev dn0 2>/dev/null || true
 ip -6 neigh flush dev up0 2>/dev/null || true

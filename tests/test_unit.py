@@ -87,6 +87,28 @@ class Parsing(unittest.TestCase):
         ])
 
 
+class DefaultRoutes(unittest.TestCase):
+    def test_single(self):
+        self.assertEqual(g.default_route_devices(
+            "default via fe80::1 dev eth0 proto ra metric 1024 expires 1790sec pref medium\n"),
+            ["eth0"])
+
+    def test_best_metric_first(self):
+        self.assertEqual(g.default_route_devices(
+            "default via fe80::1 dev wlan0 proto ra metric 600 pref medium\n"
+            "default via fe80::1 dev eth0 proto ra metric 100 pref medium\n"),
+            ["eth0", "wlan0"])
+
+    def test_multipath_uses_first_nexthop(self):
+        self.assertEqual(g.default_route_devices(
+            "default proto ra metric 1024 expires 1790sec pref medium\n"
+            "\tnexthop via fe80::1 dev eth1 weight 1\n"
+            "\tnexthop via fe80::2 dev eth0 weight 1\n"), ["eth1"])
+
+    def test_none(self):
+        self.assertEqual(g.default_route_devices(""), [])
+
+
 class UplinkPrefix(unittest.TestCase):
     def addrs(self, *items):
         return [(A(a), set(f.split())) for a, f in items]
@@ -199,9 +221,10 @@ class Config(unittest.TestCase):
         base.update(kw)
         return argparse.Namespace(**base)
 
-    def test_requires_uplink(self):
-        with self.assertRaises(ValueError):
-            g.build_config(self.ns(), {})
+    def test_uplink_defaults_to_auto(self):
+        self.assertIsNone(g.build_config(self.ns(), {}).uplink)
+        self.assertIsNone(g.build_config(self.ns(), {"uplink": "auto"}).uplink)
+        self.assertIsNone(g.build_config(self.ns(uplink="auto"), {"uplink": "eth0"}).uplink)
 
     def test_cli_overrides_file(self):
         cfg = g.build_config(self.ns(uplink="eth1"), {"uplink": "eth0"})
@@ -273,10 +296,13 @@ class FakeIp:
         self.neigh = {"up0": [], "dn0": [], "a0": []}
         self.routes = {}
         self.proxy = set()
+        self.defaults = ["up0"]
         self.failing = set()
+        self.calls = []
 
     def __call__(self, argv, timeout=10.0):
         cmd = tuple(argv)
+        self.calls.append(cmd)
         if cmd in self.failing:
             return subprocess.CompletedProcess(argv, 1, "", "simulated failure")
         out = ""
@@ -284,6 +310,9 @@ class FakeIp:
             pass
         elif cmd[:5] == ("ip", "-6", "-o", "addr", "show"):
             out = f"2: up0    inet6 {self.uplink_addr}/64 scope global\n"
+        elif cmd == ("ip", "-6", "route", "show", "default"):
+            out = "".join(f"default via fe80::1 dev {d} proto ra metric 1024\n"
+                          for d in self.defaults)
         elif cmd[:6] == ("ip", "-6", "route", "show", "table", "main"):
             out = "".join(f"{a} dev {d} metric 1024\n" for a, d in self.routes.items())
         elif cmd[:5] == ("ip", "-6", "neigh", "show", "proxy"):
@@ -307,7 +336,8 @@ class Reconcile(unittest.TestCase):
     def setUp(self):
         self.ip = FakeIp()
         for patch in (mock.patch.object(g, "run", self.ip),
-                      mock.patch.object(g, "link_present", lambda name: True)):
+                      mock.patch.object(g, "link_present", lambda name: True),
+                      mock.patch.object(g, "check_sysctls", lambda uplink: None)):
             patch.start()
             self.addCleanup(patch.stop)
         self.proxy = g.Proxy(g.Config(uplink="up0", downstream=("dn0",),
@@ -358,6 +388,49 @@ class Reconcile(unittest.TestCase):
         with self.assertLogs(g.log, "WARNING"):
             self.proxy.reconcile()
         self.assertEqual(self.ip.routes, {str(GUA): "dn0"})
+
+
+class AutoUplink(Reconcile):
+    """Reruns every Reconcile test with the uplink detected, not configured."""
+
+    def setUp(self):
+        super().setUp()
+        self.proxy = g.Proxy(g.Config(downstream=("dn0",), gadget_drivers=()))
+
+    def test_picks_the_default_route_interface(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.assertEqual(self.proxy.uplink, "up0")
+        self.assertIn(("ip", "-6", "neigh", "replace", "proxy", str(GUA), "dev", "up0"),
+                      self.ip.calls)
+
+    def test_waits_without_a_default_route(self):
+        self.device_present()
+        self.ip.defaults = []
+        with self.assertLogs(g.log, "WARNING") as logs:
+            self.proxy.reconcile()
+        self.assertIn("no IPv6 default route", logs.output[0])
+        self.assertEqual((self.ip.routes, self.ip.proxy), ({}, set()))
+        self.ip.defaults = ["up0"]
+        self.proxy.reconcile()
+        self.assertEqual(self.ip.proxy, {str(GUA)})
+
+    def test_never_picks_a_downstream_link(self):
+        self.ip.defaults = ["dn0"]
+        with self.assertLogs(g.log, "WARNING"):
+            self.proxy.reconcile()
+        self.assertIsNone(self.proxy.uplink)
+
+    def test_route_move_clears_the_old_uplink(self):
+        self.device_present()
+        self.proxy.reconcile()
+        self.ip.defaults = ["a0"]
+        self.proxy.reconcile()
+        self.assertEqual(self.proxy.uplink, "a0")
+        self.assertIn(("ip", "-6", "neigh", "del", "proxy", str(GUA), "dev", "up0"),
+                      self.ip.calls)
+        self.assertIn(("ip", "-6", "neigh", "replace", "proxy", str(GUA), "dev", "a0"),
+                      self.ip.calls)
 
 
 if __name__ == "__main__":

@@ -30,21 +30,21 @@ supplied unit. Building needs Meson and Ninja.
 meson setup build --prefix=/usr
 meson test -C build
 sudo meson install -C build
-
-sudoedit /etc/gua-ndp-proxy/gua-ndp-proxy.conf     # set uplink
 sudo systemctl enable --now gua-ndp-proxy
 ```
 
-`meson install` puts a default configuration in `/etc/gua-ndp-proxy/` and
-leaves an existing one alone, so reinstalling keeps your settings. USB gadget
-links are found automatically; list any other downstream link, such as a
-Bluetooth PAN bridge, as `downstream`.
+`meson install` puts a default configuration in
+`/etc/gua-ndp-proxy/gua-ndp-proxy.conf` and leaves an existing one alone, so
+reinstalling keeps your settings. The defaults work for most gateways: the
+uplink is the interface carrying the IPv6 default route, and USB gadget links
+are found automatically. Edit it to name the uplink yourself or to add
+another downstream link, such as a Bluetooth PAN bridge.
 
 You also need to advertise the /64 off-link on each downstream link
 (`examples/downstream-link.network`) and set a few sysctls; see
 [docs/installation.md](docs/installation.md) and
 [docs/configuration.md](docs/configuration.md). Preview what it would do with
-`gua-ndp-proxy --uplink eth0 --downstream usb0 --dry-run --once -v`.
+`gua-ndp-proxy --dry-run --once -v`.
 
 ## Limitations
 
