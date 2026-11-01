@@ -17,7 +17,7 @@ if [ -z "${GUA_NETNS:-}" ]; then
 fi
 
 skip() { echo "SKIP: $*"; exit 77; }
-fail() { echo "FAIL: $*"; cat "$WORK/networkd.log" 2>/dev/null | tail -n 20; exit 1; }
+fail() { echo "FAIL: $*"; tail -n 20 "$WORK/networkd.log" 2>/dev/null; exit 1; }
 
 # Read-only /sys tells networkd there is no udev to wait for, as in a container.
 mount -t sysfs -o ro sysfs /sys 2>/dev/null || skip "cannot mount sysfs"
