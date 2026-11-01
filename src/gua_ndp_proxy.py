@@ -631,10 +631,15 @@ class Proxy:
                 log.info("dry-run: would advertise %s via %s", prefix, path)
                 continue
             try:
-                os.makedirs(os.path.dirname(path), exist_ok=True)
+                # Explicit modes: networkd runs unprivileged and silently skips
+                # what it cannot read, and the unit's umask is 0077.
+                directory = os.path.dirname(path)
+                os.makedirs(directory, exist_ok=True)
+                os.chmod(directory, 0o755)
                 tmp = path + ".tmp"
                 with open(tmp, "w", encoding="utf-8") as fh:
                     fh.write(content)
+                os.chmod(tmp, 0o644)
                 os.replace(tmp, path)
             except OSError as exc:
                 log.error("cannot write %s: %s", path, exc)

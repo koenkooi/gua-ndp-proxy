@@ -3,6 +3,7 @@ import argparse
 import ipaddress
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -497,6 +498,16 @@ class Advertisement(unittest.TestCase):
         self.assertIn("Prefix=2001:db8:1234:5678::/64\n", self.read("05-usb.network"))
         self.assertIn("OnLink=no\n", self.read("05-usb.network"))
         self.assertEqual(self.reloads, 1)
+
+    def test_dropin_is_readable_by_networkd_under_the_units_umask(self):
+        # networkd runs unprivileged; the unit sets UMask=0077.
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        old = os.umask(0o077)
+        self.addCleanup(os.umask, old)
+        self.proxy.sync_advertisement(PREFIX)
+        path = self.dropin("05-usb.network")
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o644)
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.dirname(path)).st_mode), 0o755)
 
     def test_unchanged_prefix_does_not_reload(self):
         self.link("usb0", 7, "/etc/systemd/network/05-usb.network")

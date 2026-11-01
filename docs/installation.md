@@ -62,9 +62,9 @@ applies systemd's filesystem, kernel and system-call sandboxing. Besides
 have passed inside a transient user service with the unit's
 `SystemCallFilter=`, `RestrictAddressFamilies=`, `MemoryDenyWriteExecute=`,
 `ProtectSystem=` and `PrivateDevices=` settings, widened only by the mount
-and namespace calls the tests themselves need. The capability bounding set,
-`ProtectKernelTunables=` and `RestrictNamespaces=` have not been tested as a
-real root service. If the daemon fails to start on your system,
+and namespace calls the tests themselves need, and the full unit has run as a
+real root service on a systemd 257 gateway, including `ping` and
+`networkctl reload`. If the daemon fails to start on your system,
 `journalctl -u gua-ndp-proxy` shows why, and relaxing `SystemCallFilter=` is
 the first thing to try. Please report what you found.
 
