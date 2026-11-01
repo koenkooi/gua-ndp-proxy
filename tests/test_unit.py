@@ -2,6 +2,7 @@
 import argparse
 import ipaddress
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -217,7 +218,7 @@ class Config(unittest.TestCase):
     def ns(self, **kw):
         base = dict(uplink=None, prefix=None, downstream=None, gadget_driver=None,
                     no_gadget_discovery=False, interval=None,
-                    max_per_interface=None, dry_run=False)
+                    max_per_interface=None, advertise=False, dry_run=False)
         base.update(kw)
         return argparse.Namespace(**base)
 
@@ -446,6 +447,122 @@ class MissingUplink(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("eth0 does not exist", logs.output[0])
         self.assertIn("end0, wlan0;", logs.output[0])
+
+
+class Advertisement(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = tmp.name
+        self.sys = os.path.join(self.root, "sys")
+        self.links = os.path.join(self.root, "links")
+        self.run = os.path.join(self.root, "network")
+        os.makedirs(self.links)
+        for name, value in (("SYSFS_NET", self.sys), ("NETIF_LINKS", self.links),
+                            ("NETWORKD_RUN", self.run)):
+            patcher = mock.patch.object(g, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.proxy = g.Proxy(g.Config(uplink="eth0", downstream=("br0", "usb0"),
+                                      gadget_drivers=(), advertise=True))
+        self.reloads = 0
+        self.reload_ok = True
+        self.proxy._apply = self.fake_apply
+
+    def fake_apply(self, argv):
+        self.assertEqual(argv, ["networkctl", "reload"])
+        self.reloads += 1
+        return self.reload_ok
+
+    def link(self, name, ifindex, network_file):
+        os.makedirs(os.path.join(self.sys, name), exist_ok=True)
+        with open(os.path.join(self.sys, name, "ifindex"), "w") as fh:
+            fh.write(f"{ifindex}\n")
+        with open(os.path.join(self.links, str(ifindex)), "w") as fh:
+            fh.write("ADMIN_STATE=configured\n")
+            if network_file:
+                fh.write(f"NETWORK_FILE={network_file}\n")
+
+    def dropin(self, base):
+        return os.path.join(self.run, base + ".d", g.DROPIN_NAME)
+
+    def read(self, base):
+        with open(self.dropin(base)) as fh:
+            return fh.read()
+
+    def test_writes_dropin_and_reloads(self):
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertEqual(self.read("05-usb.network"), g.advert_dropin(PREFIX))
+        self.assertIn("Prefix=2001:db8:1234:5678::/64\n", self.read("05-usb.network"))
+        self.assertIn("OnLink=no\n", self.read("05-usb.network"))
+        self.assertEqual(self.reloads, 1)
+
+    def test_unchanged_prefix_does_not_reload(self):
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.proxy.sync_advertisement(PREFIX)
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertEqual(self.reloads, 1)
+
+    def test_bridge_without_members_is_included(self):
+        self.link("br0", 4, "/etc/systemd/network/25-br.network")
+        os.makedirs(os.path.join(self.sys, "br0", "bridge"))
+        os.makedirs(os.path.join(self.sys, "br0", "brif"))
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertTrue(os.path.exists(self.dropin("25-br.network")))
+
+    def test_prefix_change_rewrites_unplugged_links_too(self):
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.proxy.sync_advertisement(PREFIX)
+        shutil.rmtree(os.path.join(self.sys, "usb0"))
+        other = ipaddress.IPv6Network("2001:db8:aaaa:bbbb::/64")
+        self.proxy.sync_advertisement(other)
+        self.assertEqual(self.read("05-usb.network"), g.advert_dropin(other))
+        self.assertEqual(self.reloads, 2)
+
+    def test_link_not_matched_yet_is_skipped(self):
+        self.link("usb0", 7, None)
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertEqual(self.reloads, 0)
+
+    def test_odd_network_file_name_is_refused(self):
+        self.assertIsNone(g.dropin_path("/etc/systemd/network/x y.network"))
+        self.assertIsNone(g.dropin_path("/etc/systemd/network/x.conf"))
+
+    def test_failed_reload_is_retried(self):
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.reload_ok = False
+        self.proxy.sync_advertisement(PREFIX)
+        self.reload_ok = True
+        self.proxy.sync_advertisement(PREFIX)
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertEqual(self.reloads, 2)
+
+    def test_dry_run_writes_nothing(self):
+        self.proxy.cfg.dry_run = True
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.proxy.sync_advertisement(PREFIX)
+        self.assertFalse(os.path.exists(self.dropin("05-usb.network")))
+        self.assertEqual(self.reloads, 0)
+
+    def test_remove_cleans_up_and_reloads(self):
+        self.link("usb0", 7, "/etc/systemd/network/05-usb.network")
+        self.proxy.sync_advertisement(PREFIX)
+        self.proxy.remove_advertisement()
+        self.assertFalse(os.path.exists(os.path.dirname(self.dropin("05-usb.network"))))
+        self.assertEqual(self.reloads, 2)
+        self.proxy.remove_advertisement()
+        self.assertEqual(self.reloads, 2)
+
+    def test_parse_network_file(self):
+        self.assertEqual(g.parse_network_file("A=1\nNETWORK_FILE=/x/y.network\n"), "/x/y.network")
+        self.assertIsNone(g.parse_network_file("A=1\n"))
+
+    def test_parse_bool(self):
+        self.assertTrue(g.parse_bool("Yes"))
+        self.assertFalse(g.parse_bool("off"))
+        with self.assertRaises(ValueError):
+            g.parse_bool("maybe")
 
 
 if __name__ == "__main__":

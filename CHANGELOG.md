@@ -10,6 +10,9 @@ All notable changes are documented here. The format follows
 
 - `gua-ndp-proxy` daemon: installs a `/128` route and an NDP proxy entry for
   each device that SLAACs an address in the uplink's /64 on a downstream link.
+- `advertise = yes`: keeps the off-link router advertisement on every downstream
+  link on the current prefix through systemd-networkd drop-ins, surviving
+  generators that rewrite the `.network` file and upstream prefix changes.
 - Configuration by file and flags; `--once`, `--dry-run`, automatic
   prefix detection from the uplink, and `uplink = auto` (the default) to
   use the interface carrying the IPv6 default route. A named uplink that

@@ -11,6 +11,7 @@ proxy entry on the uplink so the rest of the LAN can reach it.
 import argparse
 import configparser
 import dataclasses
+import glob
 import ipaddress
 import logging
 import os
@@ -33,6 +34,9 @@ DEFAULT_GADGET_DRIVERS = (
 )
 SYSFS_NET = "/sys/class/net"
 PROC_SYS = "/proc/sys"
+NETIF_LINKS = "/run/systemd/netif/links"
+NETWORKD_RUN = "/run/systemd/network"
+DROPIN_NAME = "60-gua-ndp-proxy.conf"
 
 # Tags the host routes this daemon installs so it never touches anyone else's.
 # Must not be a protocol number the kernel assigns (rtnetlink.h RTPROT_*): 99
@@ -43,6 +47,7 @@ BAD_NEIGH_STATES = frozenset({"FAILED", "INCOMPLETE"})
 UNIQUE_LOCAL = ipaddress.IPv6Network("fc00::/7")
 IID_MASK = (1 << 64) - 1
 IFNAME_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,15}$")
+NETWORK_NAME_RE = re.compile(r"^[A-Za-z0-9_.@:+-]+\.network$")
 
 # Our own pings generate neighbor events; without a minimum gap every
 # reconcile would trigger the next one.
@@ -272,6 +277,34 @@ def plan(wanted: Dict[str, str], have_routes: Dict[str, str],
     )
 
 
+def advert_dropin(prefix: ipaddress.IPv6Network) -> str:
+    """networkd drop-in advertising `prefix` off-link on a downstream link."""
+    return ("# Written by gua-ndp-proxy; removed when it stops.\n"
+            "[Network]\n"
+            "IPv6SendRA=yes\n"
+            "\n"
+            "[IPv6Prefix]\n"
+            f"Prefix={prefix}\n"
+            "OnLink=no\n"
+            "AddressAutoconfiguration=yes\n")
+
+
+def parse_network_file(link_state: str) -> Optional[str]:
+    """The .network file named by a /run/systemd/netif/links/<ifindex> file."""
+    for line in link_state.splitlines():
+        if line.startswith("NETWORK_FILE="):
+            return line.split("=", 1)[1].strip() or None
+    return None
+
+
+def dropin_path(network_file: str) -> Optional[str]:
+    """Where the drop-in for `network_file` goes, or None for an odd name."""
+    base = os.path.basename(network_file)
+    if not NETWORK_NAME_RE.match(base):
+        return None
+    return os.path.join(NETWORKD_RUN, base + ".d", DROPIN_NAME)
+
+
 # --- configuration -----------------------------------------------------------
 
 @dataclasses.dataclass
@@ -282,6 +315,7 @@ class Config:
     gadget_drivers: Tuple[str, ...] = DEFAULT_GADGET_DRIVERS
     interval: float = 30.0
     max_per_interface: int = 8
+    advertise: bool = False
     dry_run: bool = False
 
 
@@ -296,6 +330,15 @@ def parse_prefix(value: str) -> Optional[ipaddress.IPv6Network]:
     if net.prefixlen != 64:
         raise ValueError("prefix must be a /64 (SLAAC needs 64 interface-id bits)")
     return net
+
+
+def parse_bool(value: str) -> bool:
+    lowered = value.strip().lower()
+    if lowered in ("yes", "true", "on", "1"):
+        return True
+    if lowered in ("no", "false", "off", "0"):
+        return False
+    raise ValueError(f"not a boolean: {value!r}")
 
 
 def load_config_file(path: str) -> Dict[str, str]:
@@ -335,6 +378,7 @@ def build_config(args: argparse.Namespace, file_values: Dict[str, str]) -> Confi
         gadget_drivers=drivers,
         interval=float(pick(args.interval, "interval", 30.0)),
         max_per_interface=int(pick(args.max_per_interface, "max_per_interface", 8)),
+        advertise=args.advertise or parse_bool(file_values.get("advertise", "no")),
         dry_run=args.dry_run,
     )
     for name in ((cfg.uplink,) if cfg.uplink else ()) + cfg.downstream:
@@ -456,6 +500,7 @@ class Proxy:
         self._uplink_checked = False
         self._prefix: Optional[ipaddress.IPv6Network] = None
         self._drift_warned = 0.0
+        self._reload_pending = False
 
     def _apply(self, argv: List[str]) -> bool:
         if self.cfg.dry_run:
@@ -533,6 +578,84 @@ class Proxy:
         names.discard(self.uplink)
         return sorted(n for n in names if valid_ifname(n) and link_present(n))
 
+    def known_links(self) -> List[str]:
+        """Downstream links that exist, whether or not a device is attached.
+
+        Unlike present_links() this includes a bridge with no members: its
+        first client must already get the prefix.
+        """
+        names = set(self.cfg.downstream)
+        names |= gadget_interfaces(self.cfg.gadget_drivers)
+        names.discard(self.uplink)
+        return sorted(n for n in names if valid_ifname(n)
+                      and os.path.isdir(os.path.join(SYSFS_NET, n)))
+
+    def _network_file(self, iface: str) -> Optional[str]:
+        try:
+            with open(os.path.join(SYSFS_NET, iface, "ifindex"), encoding="ascii") as fh:
+                ifindex = fh.read().strip()
+            with open(os.path.join(NETIF_LINKS, ifindex), encoding="utf-8") as fh:
+                return parse_network_file(fh.read())
+        except OSError:
+            return None
+
+    def _own_dropins(self) -> List[str]:
+        return glob.glob(os.path.join(glob.escape(NETWORKD_RUN), "*.network.d", DROPIN_NAME))
+
+    def _reload_networkd(self) -> None:
+        self._reload_pending = not self._apply(["networkctl", "reload"])
+
+    def sync_advertisement(self, prefix: ipaddress.IPv6Network) -> None:
+        """Keep one drop-in per downstream .network file on the current prefix.
+
+        A link whose file networkd has not matched yet is picked up on a later
+        pass. Drop-ins of unplugged links stay, so a replugged device gets the
+        prefix from its first advertisement, and follow prefix changes too.
+        """
+        paths = set(self._own_dropins())
+        for iface in self.known_links():
+            network_file = self._network_file(iface)
+            path = dropin_path(network_file) if network_file else None
+            if path:
+                paths.add(path)
+        content = advert_dropin(prefix)
+        changed = False
+        for path in sorted(paths):
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    if fh.read() == content:
+                        continue
+            except OSError:
+                pass
+            if self.cfg.dry_run:
+                log.info("dry-run: would advertise %s via %s", prefix, path)
+                continue
+            try:
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as fh:
+                    fh.write(content)
+                os.replace(tmp, path)
+            except OSError as exc:
+                log.error("cannot write %s: %s", path, exc)
+                continue
+            log.info("advertising %s via %s", prefix, path)
+            changed = True
+        if changed or self._reload_pending:
+            self._reload_networkd()
+
+    def remove_advertisement(self) -> None:
+        removed = False
+        for path in self._own_dropins():
+            try:
+                os.unlink(path)
+                removed = True
+                os.rmdir(os.path.dirname(path))
+            except OSError:
+                pass
+        if removed:
+            self._reload_networkd()
+
     def reconcile(self) -> None:
         try:
             self._reconcile()
@@ -546,6 +669,8 @@ class Proxy:
         prefix = self.resolve_prefix()
         if prefix is None:
             return
+        if self.cfg.advertise:
+            self.sync_advertisement(prefix)
         local = {str(a) for a, _ in parse_addresses(
             query(["ip", "-6", "-o", "addr", "show"]))}
         have_routes = parse_host_routes(query(
@@ -638,6 +763,8 @@ class Proxy:
             self._apply(["ip", "-6", "neigh", "del", "proxy", addr,
                          "dev", self.uplink])
         self.owned_proxy.clear()
+        if self.cfg.advertise:
+            self.remove_advertisement()
 
 
 def start_monitor() -> subprocess.Popen:
@@ -750,6 +877,9 @@ def make_parser() -> argparse.ArgumentParser:
                    help="full reconcile at least this often (default 30)")
     p.add_argument("--max-per-interface", type=int, metavar="N",
                    help="cap on addresses one link may claim (default 8)")
+    p.add_argument("--advertise", action="store_true",
+                   help="also advertise the prefix on downstream links through "
+                        "systemd-networkd drop-ins")
     p.add_argument("--once", action="store_true",
                    help="reconcile once and exit, leaving state installed")
     p.add_argument("--dry-run", action="store_true",

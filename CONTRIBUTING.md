@@ -17,6 +17,9 @@ meson test -C build --print-errorlogs
 - `netns-integration`: runs the daemon against a real kernel inside an
   unprivileged user, network and mount namespace. Skipped (not failed) where
   unprivileged user namespaces are unavailable.
+- `networkd-integration`: runs the daemon's advertisement against a real
+  systemd-networkd in the same kind of namespace, with a veth peer doing SLAAC.
+  Skipped where networkd is missing or cannot run.
 - `gadget-subnet`: tests the optional udev helper against a fake sysfs.
 - `install-config`: checks that installing the configuration never
   overwrites an existing one.

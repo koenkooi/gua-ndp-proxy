@@ -40,8 +40,10 @@ uplink is the interface carrying the IPv6 default route, and USB gadget links
 are found automatically. Edit it to name the uplink yourself or to add
 another downstream link, such as a Bluetooth PAN bridge.
 
-You also need to advertise the /64 off-link on each downstream link
-(`examples/downstream-link.network`) and set a few sysctls; see
+With `advertise = yes` in the config the daemon also advertises the /64 on each
+downstream link through systemd-networkd and follows upstream prefix changes;
+otherwise configure that yourself (`examples/downstream-link.network`). You also
+need to set a few sysctls; see
 [docs/installation.md](docs/installation.md) and
 [docs/configuration.md](docs/configuration.md). Preview what it would do with
 `gua-ndp-proxy --dry-run --once -v`.
@@ -51,8 +53,9 @@ You also need to advertise the /64 off-link on each downstream link
 - The device's global address is derived from its link-local one, so devices
   must use the same interface identifier for both (EUI-64 does). Devices with
   per-address random or stable-privacy identifiers are not found.
-- It does not change what is advertised downstream; if your upstream prefix
-  changes, update the advertisements.
+- Automatic advertisement (`advertise = yes`) needs systemd-networkd. With
+  anything else, update the advertisements yourself when the upstream prefix
+  changes.
 - IPv6 only, a single /64.
 - Downstream links must be trusted. Read [SECURITY.md](SECURITY.md) before
   deploying.

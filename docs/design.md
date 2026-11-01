@@ -79,12 +79,14 @@ refuses to proxy, and why, is in [SECURITY.md](../SECURITY.md).
   systemd-networkd, `IPv6LinkLocalAddressGenerationMode=` in `[Network]` sets
   how the link-local address is built and `Token=` in `[IPv6AcceptRA]` sets
   the identifier used for SLAAC addresses (see `systemd.network(5)`).
-- **Static advertisement.** The daemon does not change what is advertised
-  downstream. If the upstream prefix changes, the `[IPv6Prefix]` blocks on
-  the downstream links must be updated by whatever manages them. With
-  `prefix = auto` the daemon follows the uplink, but devices keep
-  addresses from the old prefix until the advertisement changes. It logs an
-  error when a configured prefix no longer matches the uplink.
+- **Advertisement needs systemd-networkd to be automatic.** With
+  `advertise = yes` the daemon keeps the advertisement on the current prefix
+  through networkd drop-ins, which generators of the main `.network` file
+  cannot overwrite. Without it, or with another router-advertisement daemon,
+  the prefix must be kept up to date by whatever manages that configuration,
+  and the daemon only logs an error when a configured prefix no longer matches
+  the uplink. Either way, networkd sends no zero-lifetime withdrawal for an old
+  prefix, so devices keep such an address until it expires.
 - **IPv6 only, one /64.** There is no IPv4 handling and no prefix delegation.
 - **Trusted downstream links.** See the threat model in
   [SECURITY.md](../SECURITY.md).

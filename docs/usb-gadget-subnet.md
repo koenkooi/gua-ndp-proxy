@@ -20,7 +20,8 @@ pass `-Dudevrulesdir=/etc/udev/rules.d` (or `/usr/lib/udev/rules.d`) or the
 rule will not be seen.
 
 Copy that example to `/etc/gua-ndp-proxy/gadget-subnet.conf`, set
-`GUA_PREFIX` to your delegated /64, then replug the device (or
+`GUA_PREFIX` to your delegated /64 unless the daemon runs with
+`advertise = yes` (then leave it empty), and replug the device (or
 `udevadm trigger --action=add /sys/class/net/<iface>`).
 
 ## How the subnet is chosen

@@ -136,6 +136,12 @@ test(
   args: [files('tests/install_config_test.sh')],
 )
 test(
+  'networkd-integration',
+  sh,
+  args: [files('tests/networkd_integration.sh')],
+  timeout: 180,
+)
+test(
   'gadget-subnet',
   find_program('bash'),
   args: [files('tests/gadget_subnet_test.sh')],

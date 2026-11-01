@@ -27,6 +27,7 @@ max_per_interface = 8
 | | `--no-gadget-discovery` | | Only watch `downstream` |
 | `interval` | `--interval` | `30` | Reconcile at least this often (seconds, minimum 2) |
 | `max_per_interface` | `--max-per-interface` | `8` | Most addresses one link may claim |
+| `advertise` | `--advertise` | `no` | Advertise the prefix on downstream links through systemd-networkd drop-ins; see below |
 
 With `uplink = auto` the daemon waits until a default route exists, which at
 boot is when the uplink's first router advertisement arrives. If the route
@@ -56,7 +57,32 @@ on the uplink name, so set it yourself; see
 ## Advertising the prefix downstream
 
 Each downstream link's router advertisement must carry the uplink's /64 with
-the on-link flag clear and the autonomous flag set. With systemd-networkd
+the on-link flag clear and the autonomous flag set.
+
+### With `advertise = yes` (recommended on systemd-networkd)
+
+The daemon writes
+`/run/systemd/network/<file>.network.d/60-gua-ndp-proxy.conf` for the
+`.network` file of every downstream link and runs `networkctl reload` when one
+changes. Nothing else needs to know the prefix:
+
+- It follows the prefix the daemon uses, so with `prefix = auto` an upstream
+  prefix change updates every link. Devices then SLAAC the new prefix; their
+  old address ages out with its lifetime (one hour with networkd's defaults).
+- Generators that rewrite the `.network` file, such as a Bluetooth PAN helper,
+  cannot remove it.
+- List bridges in `downstream`: a bridge is advertised on even with no members,
+  so its first client gets the prefix.
+
+The drop-ins are removed when the daemon stops. A reload reconfigures only
+links whose configuration changed; a brief interruption on those links is
+normal. networkd can drop the daemon's routes on such a link; the daemon puts
+them back on its next pass (neighbor events usually trigger one within seconds,
+`interval` is the upper bound).
+
+### By hand
+
+With systemd-networkd
 (`IPv6Forwarding=` needs version 256 or newer; older versions ignore it, and
 the sysctl drop-in enables forwarding anyway):
 

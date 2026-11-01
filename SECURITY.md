@@ -23,7 +23,9 @@ and `CAP_NET_RAW`). It:
 - reads the kernel's neighbor, address and route tables by running `ip`,
 - adds and removes `/128` routes tagged `proto 76` and NDP proxy entries on
   the uplink,
-- sends ICMPv6 echo requests on downstream links with `ping`.
+- sends ICMPv6 echo requests on downstream links with `ping`,
+- with `advertise = yes`, writes networkd drop-ins under
+  `/run/systemd/network` and runs `networkctl reload`.
 
 It runs those programs with an argument list, never through a shell, and
 validates interface names before using them. It reads its configuration only

@@ -25,8 +25,9 @@ they are unavailable.
 
 ## Configure
 
-1. Advertise the uplink's /64 off-link on each downstream link, as described
-   in [configuration](configuration.md#advertising-the-prefix-downstream)
+1. Set `advertise = yes` to have the daemon advertise the uplink's /64 off-link
+   on each downstream link, or configure that by hand; see
+   [configuration](configuration.md#advertising-the-prefix-downstream)
    (`examples/downstream-link.network`).
 2. Set `net.ipv6.conf.<uplink>.accept_ra = 2`
    (`examples/sysctl-uplink-accept-ra.conf`) and apply sysctls with
